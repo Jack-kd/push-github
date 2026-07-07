@@ -1,0 +1,74 @@
+package com.jack.pushgithub.git
+
+import android.content.Context
+import com.jack.pushgithub.data.GitConfig
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.eclipse.jgit.api.Git
+import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
+import org.eclipse.jgit.transport.RemoteRefUpdate
+import java.io.File
+
+object GitHelper {
+
+    suspend fun pushSourceToRepo(
+        context: Context,
+        config: GitConfig,
+        repoUrl: String,
+        sourceDirUri: android.net.Uri,
+        onProgress: (String) -> Unit
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val repoDir = File(context.filesDir, "temp_git_upload")
+            if (repoDir.exists()) repoDir.deleteRecursively()
+            repoDir.mkdirs()
+
+            onProgress("正在克隆远程仓库...")
+
+            val cloneUrl = repoUrl.let { url ->
+                val base = url.removeSuffix("/").removeSuffix(".git")
+                "https://github.com/$base"
+            } + ".git"
+
+            Git.cloneRepository()
+                .setURI(cloneUrl)
+                .setDirectory(repoDir)
+                .setCredentialsProvider(UsernamePasswordCredentialsProvider(config.token, ""))
+                .call()
+                .use { cloneGit ->
+                    onProgress("仓库克隆成功，正在复制文件...")
+
+                    DocumentFileCopy.copyFromUri(context, sourceDirUri, repoDir)
+
+                    onProgress("文件复制完成，正在提交...")
+
+                    cloneGit.add().addFilepattern(".").call()
+                    cloneGit.commit()
+                        .setAuthor(config.username, config.email)
+                        .setMessage("自动更新于 ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}")
+                        .call()
+
+                    onProgress("正在推送到远程仓库...")
+
+                    val pushResult = cloneGit.push()
+                        .setCredentialsProvider(UsernamePasswordCredentialsProvider(config.token, ""))
+                        .call()
+
+                    for (pushInfo in pushResult) {
+                        val remoteUpdates = pushInfo.remoteUpdates
+                        for (update in remoteUpdates) {
+                            if (update.status != RemoteRefUpdate.Status.OK && update.status != RemoteRefUpdate.Status.UP_TO_DATE) {
+                                throw Exception("推送失败: ${update.status}")
+                            }
+                        }
+                    }
+                }
+
+            repoDir.deleteRecursively()
+            Result.success("推送成功！")
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Result.failure(e)
+        }
+    }
+}
