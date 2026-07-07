@@ -36,6 +36,7 @@ fun MainScreen(viewModel: MainViewModel) {
         }
     }
 
+    // 配置对话框
     if (state.showConfigDialog) {
         ConfigDialog(
             title = "请输入必要配置信息",
@@ -129,4 +130,3 @@ fun MainScreen(viewModel: MainViewModel) {
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
-            }
