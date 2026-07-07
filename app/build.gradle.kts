@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "com.jack.pushgithub"
-    compileSdk = 35
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.jack.pushgithub"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0"
     }
