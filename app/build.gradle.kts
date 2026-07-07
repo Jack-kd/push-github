@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "com.jack.pushgithub"
-    compileSdk = 34
+    compileSdk = 34  // 降低到 34 避免警告，AGP 8.2.2 兼容
 
     defaultConfig {
         applicationId = "com.jack.pushgithub"
@@ -13,6 +13,9 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+
+        // 启用多 DEX（支持大型项目）
+        multiDexEnabled = true
     }
 
     buildFeatures {
@@ -25,11 +28,15 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true   // 开启资源缩减和代码优化
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        debug {
+            // 调试时也建议开启缩减以避免内存问题
+            isMinifyEnabled = false
         }
     }
     compileOptions {
@@ -44,12 +51,15 @@ android {
 dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")   // 修复 collectAsStateWithLifecycle
     implementation("androidx.activity:activity-compose:1.8.2")
     implementation("androidx.compose.ui:ui:1.6.0")
     implementation("androidx.compose.ui:ui-tooling-preview:1.6.0")
     implementation("androidx.compose.material3:material3:1.2.0")
+    implementation("androidx.compose.material:material-icons-extended:1.6.0")  // 包含 FolderOpen 等图标
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("androidx.documentfile:documentfile:1.0.1")
+    implementation("androidx.multidex:multidex:2.0.1")     // 多 DEX 支持
 
     // JGit
     implementation("org.eclipse.jgit:org.eclipse.jgit:6.8.0.202311291450-r")
