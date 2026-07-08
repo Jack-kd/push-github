@@ -130,3 +130,48 @@ fun MainScreen(viewModel: MainViewModel) {
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // 推送按钮
+            Button(
+                onClick = { viewModel.startPush() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(12.dp),
+                enabled = !state.isWorking
+            ) {
+                if (state.isWorking) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("推送中...")
+                } else {
+                    Text("开始推送", style = MaterialTheme.typography.labelLarge)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (state.errorMessage.isNotEmpty()) {
+                Text(
+                    text = state.errorMessage,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            if (state.statusMessage.isNotEmpty()) {
+                Text(
+                    text = state.statusMessage,
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+    }
+}
