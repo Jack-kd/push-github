@@ -12,7 +12,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ClearAll
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -100,122 +99,121 @@ fun MainScreen(
             )
         }
     ) { paddingValues ->
+        // 整个界面可滚动，日志不再单独固定底部
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 主内容区域可滚动
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally
+            // 修改配置按钮
+            OutlinedButton(
+                onClick = { viewModel.openConfigDialog(modify = true) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
             ) {
-                OutlinedButton(
-                    onClick = { viewModel.openConfigDialog(modify = true) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.Settings, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("修改配置信息")
-                }
+                Icon(Icons.Default.Settings, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("修改配置信息")
+            }
 
-                Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
+            // 目标仓库地址
+            OutlinedTextField(
+                value = state.repoUrl,
+                onValueChange = { viewModel.updateRepoUrl(it) },
+                label = { Text("目标地址 (如 https://github.com/Jack-kd/cs)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 本地源码路径 + 浏览
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 OutlinedTextField(
-                    value = state.repoUrl,
-                    onValueChange = { viewModel.updateRepoUrl(it) },
-                    label = { Text("目标地址 (如 https://github.com/Jack-kd/cs)") },
+                    value = state.sourceDirDisplayName,
+                    onValueChange = { viewModel.updateSourceDirManually(it) },
+                    label = { Text("本地源码地址") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = state.sourceDirDisplayName,
-                        onValueChange = { viewModel.updateSourceDirManually(it) },
-                        label = { Text("本地源码地址") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        readOnly = false,
-                        trailingIcon = {
-                            if (state.sourceDirUri != null) {
-                                TextButton(onClick = { viewModel.clearSourceDir() }) {
-                                    Text("清除")
-                                }
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    readOnly = false,
+                    trailingIcon = {
+                        if (state.sourceDirUri != null) {
+                            TextButton(onClick = { viewModel.clearSourceDir() }) {
+                                Text("清除")
                             }
                         }
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    IconButton(onClick = { folderPicker.launch(null) }) {
-                        Icon(
-                            Icons.Default.FolderOpen,
-                            contentDescription = "选择文件夹",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
                     }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Button(
-                    onClick = {
-                        viewModel.checkStoragePermission()
-                        if (state.hasStoragePermission) {
-                            viewModel.startPush()
-                        } else {
-                            viewModel.showStoragePermissionDialog()
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    enabled = !state.isWorking
-                ) {
-                    if (state.isWorking) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("推送中...")
-                    } else {
-                        Text("开始推送", style = MaterialTheme.typography.labelLarge)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                if (state.errorMessage.isNotEmpty()) {
-                    Text(
-                        text = state.errorMessage,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-                if (state.statusMessage.isNotEmpty()) {
-                    Text(
-                        text = state.statusMessage,
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                IconButton(onClick = { folderPicker.launch(null) }) {
+                    Icon(
+                        Icons.Default.FolderOpen,
+                        contentDescription = "选择文件夹",
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
 
-            // 日志区域：固定高度 + 自动滚动 + 可选可复制
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // 推送按钮
+            Button(
+                onClick = {
+                    viewModel.checkStoragePermission()
+                    if (state.hasStoragePermission) {
+                        viewModel.startPush()
+                    } else {
+                        viewModel.showStoragePermissionDialog()
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(12.dp),
+                enabled = !state.isWorking
+            ) {
+                if (state.isWorking) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("推送中...")
+                } else {
+                    Text("开始推送", style = MaterialTheme.typography.labelLarge)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 错误/状态消息
+            if (state.errorMessage.isNotEmpty()) {
+                Text(
+                    text = state.errorMessage,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            if (state.statusMessage.isNotEmpty()) {
+                Text(
+                    text = state.statusMessage,
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+
+            // 📋 日志区域（现在紧跟在状态消息下方）
             if (state.logMessages.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(12.dp))
 
@@ -228,12 +226,9 @@ fun MainScreen(
                         text = "操作日志",
                         style = MaterialTheme.typography.titleSmall
                     )
-                    IconButton(onClick = { viewModel.clearLog() }) {
-                        Icon(
-                            Icons.Default.ClearAll,
-                            contentDescription = "清空日志",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                    // 文字“清空”按钮
+                    TextButton(onClick = { viewModel.clearLog() }) {
+                        Text("清空")
                     }
                 }
 
@@ -242,14 +237,14 @@ fun MainScreen(
                 val listState = rememberLazyListState()
                 var autoScroll by remember { mutableStateOf(true) }
 
-                // 监听手动滚动：只要不是程序触发的滚动，就停止自动滚动
+                // 手动滚动时暂停自动滚动
                 LaunchedEffect(listState.isScrollInProgress) {
                     if (listState.isScrollInProgress) {
                         autoScroll = false
                     }
                 }
 
-                // 新日志出现时自动滚动到底部（如果 autoScroll 为 true）
+                // 新日志自动滚到底部（如果 autoScroll 为 true）
                 LaunchedEffect(state.logMessages.size) {
                     if (autoScroll && state.logMessages.isNotEmpty()) {
                         listState.animateScrollToItem(state.logMessages.size - 1)
@@ -283,7 +278,7 @@ fun MainScreen(
                     }
                 }
 
-                // 如果自动滚动被关闭，显示一个“回到底部”的按钮
+                // “回到底部”按钮
                 if (!autoScroll) {
                     Spacer(modifier = Modifier.height(4.dp))
                     TextButton(
@@ -299,6 +294,9 @@ fun MainScreen(
                     }
                 }
             }
+
+            // 底部留一点空间，避免内容被遮挡
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
