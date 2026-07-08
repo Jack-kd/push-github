@@ -16,24 +16,50 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jack.pushgithub.viewmodel.MainViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(viewModel: MainViewModel) {
+fun MainScreen(
+    viewModel: MainViewModel,
+    onRequestStoragePermission: () -> Unit
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
+    // 文件夹选择器（SAF）
     val folderPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
         uri?.let {
-            val docFile = DocumentFile.fromTreeUri(context, it)
-            val name = docFile?.name ?: it.lastPathSegment ?: "已选文件夹"
-            viewModel.updateSourceDir(it, name)
+            // 尝试把 SAF URI 转换为用户可读的路径（例如 /storage/emulated/0/cd）
+            val displayPath = viewModel.tryGetDisplayPath(it)
+            // 更新到输入框，同时内部保存原始 URI 用于推送
+            viewModel.updateSourceDir(it, displayPath)
         }
+    }
+
+    // 如果用户需要手动赋予存储权限
+    if (state.showStoragePermissionDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissStoragePermissionDialog() },
+            title = { Text("需要存储权限") },
+            text = { Text("为了直接访问文件夹路径，请授予“所有文件访问”权限。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.dismissStoragePermissionDialog()
+                    onRequestStoragePermission()
+                }) {
+                    Text("去设置")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissStoragePermissionDialog() }) {
+                    Text("取消")
+                }
+            }
+        )
     }
 
     // 配置对话框
@@ -101,19 +127,22 @@ fun MainScreen(viewModel: MainViewModel) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 本地源码地址 + 浏览按钮
+            // 本地源码地址 + 浏览按钮（现在可编辑）
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 OutlinedTextField(
                     value = state.sourceDirDisplayName,
-                    onValueChange = { },
+                    onValueChange = { newValue ->
+                        // 手动输入时更新路径，并清除 URI 标记（表示这是纯文件路径）
+                        viewModel.updateSourceDirManually(newValue)
+                    },
                     label = { Text("本地源码地址") },
                     singleLine = true,
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp),
-                    readOnly = true,
+                    readOnly = false,   // 允许手动输入
                     trailingIcon = {
                         if (state.sourceDirUri != null) {
                             TextButton(onClick = { viewModel.clearSourceDir() }) {
@@ -136,7 +165,15 @@ fun MainScreen(viewModel: MainViewModel) {
 
             // 推送按钮
             Button(
-                onClick = { viewModel.startPush() },
+                onClick = {
+                    // 检查权限，如果没有则弹窗
+                    viewModel.checkStoragePermission()
+                    if (state.hasStoragePermission) {
+                        viewModel.startPush()
+                    } else {
+                        viewModel.showStoragePermissionDialog()
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
