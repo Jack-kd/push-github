@@ -17,14 +17,14 @@ android {
     }
 
     // 使用新名称 packaging，并明确排除冲突文件
-    packaging {
+        packaging {
         resources {
-            excludes += setOf(
+            pickFirsts += setOf(
+                "OSGI-INF/l10n/plugin.properties",
                 "META-INF/DEPENDENCIES",
                 "META-INF/LICENSE*",
                 "META-INF/NOTICE*",
-                "META-INF/*.properties",
-                "OSGI-INF/*"
+                "META-INF/*.properties"
             )
         }
     }
