@@ -91,14 +91,19 @@ fun MainScreen(
 
     Scaffold(
         topBar = {
-            // 使用 CenterAlignedTopAppBar，高度48dp，文字自动居中可见
+            // 使用 Box 包裹文字，保证上下左右居中
             CenterAlignedTopAppBar(
                 title = {
-                    Text(
-                        text = "Push to GitHub",
-                        maxLines = 1,
-                        style = MaterialTheme.typography.titleMedium
-                    )
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Push to GitHub",
+                            maxLines = 1,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
                 },
                 modifier = Modifier.height(48.dp),
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
