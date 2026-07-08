@@ -91,11 +91,17 @@ fun MainScreen(
 
     Scaffold(
         topBar = {
-            // 调整高度为 48dp，让标题栏更紧凑
-            TopAppBar(
-                title = { Text("Push to GitHub") },
+            // 高度调小至 48dp，文字通过 CenterAlignedTopAppBar 保证可见
+            CenterAlignedTopAppBar(
+                title = {
+                    Text(
+                        text = "Push to GitHub",
+                        maxLines = 1,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                },
                 modifier = Modifier.height(48.dp),
-                colors = TopAppBarDefaults.topAppBarColors(
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary
                 )
@@ -214,7 +220,7 @@ fun MainScreen(
                 }
             }
 
-            // 日志区域（占据剩余空间）
+            // 日志区域
             if (state.logMessages.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -282,7 +288,6 @@ fun MainScreen(
                     }
                 }
 
-                // 底部控制按钮
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
