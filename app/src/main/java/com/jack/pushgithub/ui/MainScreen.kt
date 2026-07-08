@@ -93,14 +93,14 @@ fun MainScreen(
 
     Scaffold(
         topBar = {
-            // ----- 修改点在这里 -----
-            // 1. 增加了 .statusBarsPadding()：预留出系统状态栏的高度，防止遮挡
-            // 2. 高度从 48.dp 改为 56.dp，获得更舒适的视觉比例
+            // ----- 核心修改区域 -----
+            // 1. 高度增加为 64.dp，留出更多空间
+            // 2. Text 增加 padding(top = 6.dp)，避开最顶端的系统图标
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
-                    .statusBarsPadding() 
+                    .height(64.dp)
+                    .statusBarsPadding()
                     .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
             ) {
@@ -109,7 +109,8 @@ fun MainScreen(
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onPrimary,
                     textAlign = TextAlign.Center,
-                    maxLines = 1
+                    maxLines = 1,
+                    modifier = Modifier.padding(top = 6.dp)
                 )
             }
         }
