@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.PrintWriter
+import java.io.StringWriter
 
 data class MainUiState(
     val config: GitConfig = GitConfig(),
@@ -28,7 +30,8 @@ data class MainUiState(
     val statusMessage: String = "",
     val errorMessage: String = "",
     val hasStoragePermission: Boolean = false,
-    val showStoragePermissionDialog: Boolean = false
+    val showStoragePermissionDialog: Boolean = false,
+    val logMessages: List<String> = emptyList()   // 新增：日志列表
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -48,6 +51,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
         checkStoragePermission()
+    }
+
+    // 日志记录
+    fun addLog(message: String) {
+        _uiState.update { state ->
+            state.copy(logMessages = state.logMessages + message)
+        }
+    }
+
+    fun clearLog() {
+        _uiState.update { it.copy(logMessages = emptyList()) }
     }
 
     // ---------- 配置相关 ----------
@@ -76,15 +90,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // ---------- 目标地址 ----------
     fun updateRepoUrl(url: String) {
         _uiState.update { it.copy(repoUrl = url) }
     }
 
-    // ---------- 本地源码路径 ----------
     fun tryGetDisplayPath(uri: Uri): String {
         val context = getApplication<Application>()
-        // 如果有存储权限，尝试将 SAF URI 转为文件系统路径
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()) {
             val docId = DocumentsContract.getTreeDocumentId(uri)
             if (docId.startsWith("primary:")) {
@@ -116,7 +127,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(sourceDirUri = null, sourceDirDisplayName = "") }
     }
 
-    // ---------- 权限 ----------
     fun checkStoragePermission() {
         val hasPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Environment.isExternalStorageManager()
@@ -134,23 +144,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(showStoragePermissionDialog = false) }
     }
 
-    // ---------- 推送 ----------
     fun startPush() {
         val state = _uiState.value
         if (state.repoUrl.isBlank()) {
+            addLog("错误：目标仓库地址为空")
             _uiState.update { it.copy(errorMessage = "请输入目标仓库地址") }
             return
         }
         if (state.sourceDirDisplayName.isBlank()) {
+            addLog("错误：本地源码路径为空")
             _uiState.update { it.copy(errorMessage = "请选择或输入本地源码文件夹路径") }
             return
         }
-
         if (!state.hasStoragePermission && state.sourceDirUri == null) {
+            addLog("错误：缺少存储权限，无法访问文件路径")
             _uiState.update { it.copy(errorMessage = "需要存储权限才能访问本地文件夹") }
             showStoragePermissionDialog()
             return
         }
+
+        clearLog()
+        addLog("开始推送流程...")
+        addLog("目标仓库: ${state.repoUrl}")
+        addLog("本地路径: ${state.sourceDirDisplayName}")
+        addLog("Token 已配置: ${state.config.token.isNotEmpty()}")
+        addLog("用户名: ${state.config.username}, 邮箱: ${state.config.email}")
 
         _uiState.update { it.copy(isWorking = true, errorMessage = "", statusMessage = "准备中...") }
 
@@ -162,14 +180,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 sourcePath = state.sourceDirDisplayName,
                 sourceUri = state.sourceDirUri,
                 onProgress = { msg ->
+                    addLog(msg)
                     _uiState.update { it.copy(statusMessage = msg) }
                 }
             )
             result.onSuccess { msg ->
+                addLog("✅ $msg")
                 _uiState.update { it.copy(isWorking = false, statusMessage = msg, errorMessage = "") }
             }.onFailure { e ->
+                val sw = StringWriter()
+                e.printStackTrace(PrintWriter(sw))
+                addLog("❌ 推送失败: ${e.message}")
+                addLog("详细堆栈:\n$sw")
                 _uiState.update {
-                    it.copy(isWorking = false, statusMessage = "", errorMessage = e.message ?: "操作失败")
+                    it.copy(
+                        isWorking = false,
+                        statusMessage = "",
+                        errorMessage = e.message ?: "操作失败"
+                    )
                 }
             }
         }
