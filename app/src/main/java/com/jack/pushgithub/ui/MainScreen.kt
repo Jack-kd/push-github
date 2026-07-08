@@ -38,7 +38,6 @@ fun MainScreen(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val coroutineScope = rememberCoroutineScope()
-
     val folderPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
@@ -70,7 +69,7 @@ fun MainScreen(
         )
     }
 
-    // 配置对话框
+    // 配置对话框（Scaffold同级，放在外面）
     if (state.showConfigDialog) {
         ConfigDialog(
             title = "请输入必要配置信息",
@@ -91,28 +90,29 @@ fun MainScreen(
         )
     }
 
-        Scaffold(
-      topBar = {
-          val density = LocalDensity.current
-          val statusBarHeightDp = with(density) {
-              WindowInsets.statusBars.getTop(density).toDp()
-          }
-          Box(
-              modifier = Modifier
-                  .fillMaxWidth()
-                  .height(56.dp + statusBarHeightDp)
-                  .background(MaterialTheme.colorScheme.primary),
-              contentAlignment = Alignment.Center
-          ) {
-              Text(
-                  text = "Push to GitHub",
-                  style = MaterialTheme.typography.titleMedium,
-                  color = MaterialTheme.colorScheme.onPrimary,
-                  textAlign = TextAlign.Center,
-                  maxLines = 1
-              )
-          }
-      }
+    // 主页面脚手架
+    Scaffold(
+        topBar = {
+            val density = LocalDensity.current
+            val statusBarHeightDp = with(density) {
+                WindowInsets.statusBars.getTop(density).toDp()
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp + statusBarHeightDp)
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Push to GitHub",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1
+                )
+            }
+        }
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -134,9 +134,7 @@ fun MainScreen(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("修改配置信息")
                 }
-
                 Spacer(modifier = Modifier.height(24.dp))
-
                 OutlinedTextField(
                     value = state.repoUrl,
                     onValueChange = { viewModel.updateRepoUrl(it) },
@@ -145,9 +143,7 @@ fun MainScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
-
                 Spacer(modifier = Modifier.height(16.dp))
-
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -177,9 +173,7 @@ fun MainScreen(
                         )
                     }
                 }
-
                 Spacer(modifier = Modifier.height(24.dp))
-
                 Button(
                     onClick = {
                         viewModel.checkStoragePermission()
@@ -207,9 +201,7 @@ fun MainScreen(
                         Text("开始推送", style = MaterialTheme.typography.labelLarge)
                     }
                 }
-
                 Spacer(modifier = Modifier.height(8.dp))
-
                 if (state.errorMessage.isNotEmpty()) {
                     Text(
                         text = state.errorMessage,
@@ -229,7 +221,6 @@ fun MainScreen(
             // 日志区域
             if (state.logMessages.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
-
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -243,24 +234,19 @@ fun MainScreen(
                         Text("清空")
                     }
                 }
-
                 Spacer(modifier = Modifier.height(4.dp))
-
                 val scrollState = rememberScrollState()
                 var autoScroll by remember { mutableStateOf(true) }
-
                 LaunchedEffect(scrollState.isScrollInProgress) {
                     if (scrollState.isScrollInProgress) {
                         autoScroll = false
                     }
                 }
-
                 LaunchedEffect(state.logMessages.size) {
                     if (autoScroll && state.logMessages.isNotEmpty()) {
                         scrollState.animateScrollTo(scrollState.maxValue)
                     }
                 }
-
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -293,7 +279,6 @@ fun MainScreen(
                         }
                     }
                 }
-
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -312,7 +297,6 @@ fun MainScreen(
                     } else {
                         Spacer(modifier = Modifier.width(1.dp))
                     }
-
                     TextButton(onClick = {
                         val fullLog = state.logMessages.joinToString("\n")
                         clipboardManager.setText(AnnotatedString(fullLog))
