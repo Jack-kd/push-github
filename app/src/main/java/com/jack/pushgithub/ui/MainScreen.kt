@@ -93,16 +93,13 @@ fun MainScreen(
 
     Scaffold(
         topBar = {
-            // ----- 核心修改区域 -----
-            // 1. 高度增加为 64.dp，留出更多空间
-            // 2. Text 增加 padding(top = 6.dp)，避开最顶端的系统图标
+            // ----- 核心修改区域（不再使用 statusBarsPadding，而是把文字固定在头部） -----
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(64.dp)
-                    .statusBarsPadding()
+                    .height(56.dp)
                     .background(MaterialTheme.colorScheme.primary),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.TopCenter // 1. 改为顶部对齐
             ) {
                 Text(
                     text = "Push to GitHub",
@@ -110,7 +107,7 @@ fun MainScreen(
                     color = MaterialTheme.colorScheme.onPrimary,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
-                    modifier = Modifier.padding(top = 6.dp)
+                    modifier = Modifier.padding(top = 30.dp) // 2. 增加 30dp 的顶部间距，刚好避开系统图标
                 )
             }
         }
