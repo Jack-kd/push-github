@@ -91,8 +91,10 @@ fun MainScreen(
 
     Scaffold(
         topBar = {
+            // 调整高度为 48dp，让标题栏更紧凑
             TopAppBar(
                 title = { Text("Push to GitHub") },
+                modifier = Modifier.height(48.dp),
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary
@@ -232,18 +234,15 @@ fun MainScreen(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // 日志滚动状态定义在 Box 外部，方便底部按钮访问
                 val scrollState = rememberScrollState()
                 var autoScroll by remember { mutableStateOf(true) }
 
-                // 监听手动滚动：一旦用户触摸滚动，停止自动滚动
                 LaunchedEffect(scrollState.isScrollInProgress) {
                     if (scrollState.isScrollInProgress) {
                         autoScroll = false
                     }
                 }
 
-                // 新日志出现且允许自动滚动时，滚到底部
                 LaunchedEffect(state.logMessages.size) {
                     if (autoScroll && state.logMessages.isNotEmpty()) {
                         scrollState.animateScrollTo(scrollState.maxValue)
@@ -283,7 +282,7 @@ fun MainScreen(
                     }
                 }
 
-                // 底部控制按钮：左“回到底部”，右“复制日志”
+                // 底部控制按钮
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
