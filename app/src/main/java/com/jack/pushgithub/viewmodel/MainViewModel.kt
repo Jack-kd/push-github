@@ -31,7 +31,7 @@ data class MainUiState(
     val errorMessage: String = "",
     val hasStoragePermission: Boolean = false,
     val showStoragePermissionDialog: Boolean = false,
-    val logMessages: List<String> = emptyList()   // 新增：日志列表
+    val logMessages: List<String> = emptyList()
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -53,7 +53,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         checkStoragePermission()
     }
 
-    // 日志记录
     fun addLog(message: String) {
         _uiState.update { state ->
             state.copy(logMessages = state.logMessages + message)
@@ -64,14 +63,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(logMessages = emptyList()) }
     }
 
-    // ---------- 配置相关 ----------
+    // 配置相关方法（openConfigDialog, dismissConfigDialog, saveConfig, updateRepoUrl 等保持不变，这里省略不重复）
     fun openConfigDialog(modify: Boolean = false) {
-        _uiState.update {
-            it.copy(
-                showConfigDialog = true,
-                isFirstTime = !modify
-            )
-        }
+        _uiState.update { it.copy(showConfigDialog = true, isFirstTime = !modify) }
     }
 
     fun dismissConfigDialog() {
@@ -81,13 +75,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun saveConfig(email: String, username: String, token: String) {
         val newConfig = GitConfig(email, username, token)
         repository.saveConfig(newConfig)
-        _uiState.update {
-            it.copy(
-                config = newConfig,
-                hasConfig = true,
-                showConfigDialog = false
-            )
-        }
+        _uiState.update { it.copy(config = newConfig, hasConfig = true, showConfigDialog = false) }
     }
 
     fun updateRepoUrl(url: String) {
@@ -109,18 +97,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateSourceDir(uri: Uri, displayPath: String) {
         getApplication<Application>().contentResolver.takePersistableUriPermission(
-            uri,
-            android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
         )
-        _uiState.update {
-            it.copy(sourceDirUri = uri, sourceDirDisplayName = displayPath)
-        }
+        _uiState.update { it.copy(sourceDirUri = uri, sourceDirDisplayName = displayPath) }
     }
 
     fun updateSourceDirManually(newPath: String) {
-        _uiState.update {
-            it.copy(sourceDirDisplayName = newPath, sourceDirUri = null)
-        }
+        _uiState.update { it.copy(sourceDirDisplayName = newPath, sourceDirUri = null) }
     }
 
     fun clearSourceDir() {
@@ -145,60 +128,76 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun startPush() {
-        val state = _uiState.value
-        if (state.repoUrl.isBlank()) {
-            addLog("错误：目标仓库地址为空")
-            _uiState.update { it.copy(errorMessage = "请输入目标仓库地址") }
-            return
-        }
-        if (state.sourceDirDisplayName.isBlank()) {
-            addLog("错误：本地源码路径为空")
-            _uiState.update { it.copy(errorMessage = "请选择或输入本地源码文件夹路径") }
-            return
-        }
-        if (!state.hasStoragePermission && state.sourceDirUri == null) {
-            addLog("错误：缺少存储权限，无法访问文件路径")
-            _uiState.update { it.copy(errorMessage = "需要存储权限才能访问本地文件夹") }
-            showStoragePermissionDialog()
-            return
-        }
+        try {
+            val state = _uiState.value
+            if (state.repoUrl.isBlank()) {
+                addLog("错误：目标仓库地址为空")
+                _uiState.update { it.copy(errorMessage = "请输入目标仓库地址") }
+                return
+            }
+            if (state.sourceDirDisplayName.isBlank()) {
+                addLog("错误：本地源码路径为空")
+                _uiState.update { it.copy(errorMessage = "请选择或输入本地源码文件夹路径") }
+                return
+            }
+            if (!state.hasStoragePermission && state.sourceDirUri == null) {
+                addLog("错误：缺少存储权限，无法访问文件路径")
+                _uiState.update { it.copy(errorMessage = "需要存储权限才能访问本地文件夹") }
+                showStoragePermissionDialog()
+                return
+            }
 
-        clearLog()
-        addLog("开始推送流程...")
-        addLog("目标仓库: ${state.repoUrl}")
-        addLog("本地路径: ${state.sourceDirDisplayName}")
-        addLog("Token 已配置: ${state.config.token.isNotEmpty()}")
-        addLog("用户名: ${state.config.username}, 邮箱: ${state.config.email}")
+            clearLog()
+            addLog("开始推送流程...")
+            addLog("目标仓库: ${state.repoUrl}")
+            addLog("本地路径: ${state.sourceDirDisplayName}")
+            addLog("Token 长度: ${state.config.token.length} (有效: ${state.config.token.isNotEmpty()})")
+            addLog("用户名: ${state.config.username}, 邮箱: ${state.config.email}")
 
-        _uiState.update { it.copy(isWorking = true, errorMessage = "", statusMessage = "准备中...") }
+            _uiState.update { it.copy(isWorking = true, errorMessage = "", statusMessage = "准备中...") }
 
-        viewModelScope.launch {
-            val result = GitHelper.pushSourceToRepo(
-                context = getApplication(),
-                config = state.config,
-                repoUrl = state.repoUrl,
-                sourcePath = state.sourceDirDisplayName,
-                sourceUri = state.sourceDirUri,
-                onProgress = { msg ->
-                    addLog(msg)
-                    _uiState.update { it.copy(statusMessage = msg) }
-                }
-            )
-            result.onSuccess { msg ->
-                addLog("✅ $msg")
-                _uiState.update { it.copy(isWorking = false, statusMessage = msg, errorMessage = "") }
-            }.onFailure { e ->
-                val sw = StringWriter()
-                e.printStackTrace(PrintWriter(sw))
-                addLog("❌ 推送失败: ${e.message}")
-                addLog("详细堆栈:\n$sw")
-                _uiState.update {
-                    it.copy(
-                        isWorking = false,
-                        statusMessage = "",
-                        errorMessage = e.message ?: "操作失败"
+            viewModelScope.launch {
+                try {
+                    val result = GitHelper.pushSourceToRepo(
+                        context = getApplication(),
+                        config = state.config,
+                        repoUrl = state.repoUrl,
+                        sourcePath = state.sourceDirDisplayName,
+                        sourceUri = state.sourceDirUri,
+                        onProgress = { msg ->
+                            addLog(msg)
+                            _uiState.update { it.copy(statusMessage = msg) }
+                        }
                     )
+                    result.onSuccess { msg ->
+                        addLog("✅ $msg")
+                        _uiState.update { it.copy(isWorking = false, statusMessage = msg, errorMessage = "") }
+                    }.onFailure { e ->
+                        val sw = StringWriter()
+                        e.printStackTrace(PrintWriter(sw))
+                        addLog("❌ 推送失败: ${e.message}")
+                        addLog("详细堆栈:\n$sw")
+                        _uiState.update {
+                            it.copy(isWorking = false, statusMessage = "", errorMessage = e.message ?: "操作失败")
+                        }
+                    }
+                } catch (e: Exception) {
+                    val sw = StringWriter()
+                    e.printStackTrace(PrintWriter(sw))
+                    addLog("❌ 协程内异常: ${e.message}")
+                    addLog(sw.toString())
+                    _uiState.update {
+                        it.copy(isWorking = false, statusMessage = "", errorMessage = e.message ?: "未知错误")
+                    }
                 }
+            }
+        } catch (e: Exception) {
+            val sw = StringWriter()
+            e.printStackTrace(PrintWriter(sw))
+            addLog("❌ startPush 异常: ${e.message}")
+            addLog(sw.toString())
+            _uiState.update {
+                it.copy(isWorking = false, statusMessage = "", errorMessage = e.message ?: "未知错误")
             }
         }
     }
