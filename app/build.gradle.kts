@@ -19,11 +19,9 @@ android {
     }
 
 
-packagingOptions {
-    exclude("OSGI-INF/l10n/plugin.properties")
-}
-
-
+    packagingOptions {
+        exclude("OSGI-INF/l10n/plugin.properties")
+    }
 
 
     buildFeatures {
