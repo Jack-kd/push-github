@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jack.pushgithub.viewmodel.MainViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,6 +35,7 @@ fun MainScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
+    val coroutineScope = rememberCoroutineScope()
 
     val folderPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -104,7 +106,7 @@ fun MainScreen(
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
-            // 上半部分：表单区域（固定不滚动）
+            // 上半部分：表单区域
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -210,7 +212,7 @@ fun MainScreen(
                 }
             }
 
-            // 下半部分：日志区域（占据剩余空间，内部可滚动）
+            // 日志区域（占据剩余空间）
             if (state.logMessages.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -230,38 +232,36 @@ fun MainScreen(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // 日志滚动区域（占满剩余空间）
+                // 日志滚动状态定义在 Box 外部，方便底部按钮访问
+                val scrollState = rememberScrollState()
+                var autoScroll by remember { mutableStateOf(true) }
+
+                // 监听手动滚动：一旦用户触摸滚动，停止自动滚动
+                LaunchedEffect(scrollState.isScrollInProgress) {
+                    if (scrollState.isScrollInProgress) {
+                        autoScroll = false
+                    }
+                }
+
+                // 新日志出现且允许自动滚动时，滚到底部
+                LaunchedEffect(state.logMessages.size) {
+                    if (autoScroll && state.logMessages.isNotEmpty()) {
+                        scrollState.animateScrollTo(scrollState.maxValue)
+                    }
+                }
+
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
                 ) {
-                    val scrollState = rememberScrollState()
-                    var autoScroll by remember { mutableStateOf(true) }
-
-                    // 监听用户手动滚动：停止自动滚动
-                    LaunchedEffect(scrollState.isScrollInProgress) {
-                        if (scrollState.isScrollInProgress) {
-                            autoScroll = false
-                        }
-                    }
-
-                    // 新日志时自动滚动到底部
-                    LaunchedEffect(state.logMessages.size) {
-                        if (autoScroll && state.logMessages.isNotEmpty()) {
-                            scrollState.animateScrollTo(scrollState.maxValue)
-                        }
-                    }
-
                     Card(
-                        modifier = Modifier
-                            .fillMaxSize(),
+                        modifier = Modifier.fillMaxSize(),
                         shape = RoundedCornerShape(8.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant
                         )
                     ) {
-                        // 跨行选择容器
                         SelectionContainer {
                             Column(
                                 modifier = Modifier
@@ -283,7 +283,7 @@ fun MainScreen(
                     }
                 }
 
-                // 控制按钮：左侧“回到底部”，右侧“复制日志”
+                // 底部控制按钮：左“回到底部”，右“复制日志”
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -293,13 +293,14 @@ fun MainScreen(
                     if (!autoScroll) {
                         TextButton(onClick = {
                             autoScroll = true
-                            // 通过 scrollState 滚动到底部
-                            scrollState.animateScrollTo(scrollState.maxValue)
+                            coroutineScope.launch {
+                                scrollState.animateScrollTo(scrollState.maxValue)
+                            }
                         }) {
                             Text("回到底部")
                         }
                     } else {
-                        Spacer(modifier = Modifier.width(1.dp)) // 占位，保持布局
+                        Spacer(modifier = Modifier.width(1.dp))
                     }
 
                     TextButton(onClick = {
