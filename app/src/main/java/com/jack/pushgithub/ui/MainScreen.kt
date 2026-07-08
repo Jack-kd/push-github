@@ -92,21 +92,27 @@ fun MainScreen(
     }
 
         Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-               title = {
-                    Text(
-                        text = "Push to GitHub",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        maxLines = 1
-                    )
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
-            )
-        }
+      topBar = {
+          val density = LocalDensity.current
+          val statusBarHeightDp = with(density) {
+              WindowInsets.statusBars.getTop(density).toDp()
+          }
+          Box(
+              modifier = Modifier
+                  .fillMaxWidth()
+                  .height(56.dp + statusBarHeightDp)
+                  .background(MaterialTheme.colorScheme.primary),
+              contentAlignment = Alignment.Center
+          ) {
+              Text(
+                  text = "Push to GitHub",
+                  style = MaterialTheme.typography.titleMedium,
+                  color = MaterialTheme.colorScheme.onPrimary,
+                  textAlign = TextAlign.Center,
+                  maxLines = 1
+              )
+          }
+      }
     ) { paddingValues ->
         Column(
             modifier = Modifier
