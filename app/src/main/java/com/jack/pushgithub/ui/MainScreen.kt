@@ -16,6 +16,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jack.pushgithub.viewmodel.MainViewModel
 
@@ -28,19 +30,15 @@ fun MainScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    // 文件夹选择器（SAF）
     val folderPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
         uri?.let {
-            // 尝试把 SAF URI 转换为用户可读的路径（例如 /storage/emulated/0/cd）
             val displayPath = viewModel.tryGetDisplayPath(it)
-            // 更新到输入框，同时内部保存原始 URI 用于推送
             viewModel.updateSourceDir(it, displayPath)
         }
     }
 
-    // 如果用户需要手动赋予存储权限
     if (state.showStoragePermissionDialog) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissStoragePermissionDialog() },
@@ -62,7 +60,6 @@ fun MainScreen(
         )
     }
 
-    // 配置对话框
     if (state.showConfigDialog) {
         ConfigDialog(
             title = "请输入必要配置信息",
@@ -102,7 +99,6 @@ fun MainScreen(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 修改配置按钮
             OutlinedButton(
                 onClick = { viewModel.openConfigDialog(modify = true) },
                 modifier = Modifier.fillMaxWidth(),
@@ -115,7 +111,6 @@ fun MainScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // 目标地址输入
             OutlinedTextField(
                 value = state.repoUrl,
                 onValueChange = { viewModel.updateRepoUrl(it) },
@@ -127,22 +122,18 @@ fun MainScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 本地源码地址 + 浏览按钮（现在可编辑）
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 OutlinedTextField(
                     value = state.sourceDirDisplayName,
-                    onValueChange = { newValue ->
-                        // 手动输入时更新路径，并清除 URI 标记（表示这是纯文件路径）
-                        viewModel.updateSourceDirManually(newValue)
-                    },
+                    onValueChange = { viewModel.updateSourceDirManually(it) },
                     label = { Text("本地源码地址") },
                     singleLine = true,
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp),
-                    readOnly = false,   // 允许手动输入
+                    readOnly = false,
                     trailingIcon = {
                         if (state.sourceDirUri != null) {
                             TextButton(onClick = { viewModel.clearSourceDir() }) {
@@ -163,10 +154,8 @@ fun MainScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // 推送按钮
             Button(
                 onClick = {
-                    // 检查权限，如果没有则弹窗
                     viewModel.checkStoragePermission()
                     if (state.hasStoragePermission) {
                         viewModel.startPush()
@@ -208,6 +197,40 @@ fun MainScreen(
                     color = MaterialTheme.colorScheme.primary,
                     style = MaterialTheme.typography.bodyMedium
                 )
+            }
+
+            // 日志输出区域
+            if (state.logMessages.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "操作日志",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.align(Alignment.Start)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .padding(8.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        state.logMessages.forEach { log ->
+                            Text(
+                                text = log,
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 18.sp,
+                                modifier = Modifier.padding(vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
     }
