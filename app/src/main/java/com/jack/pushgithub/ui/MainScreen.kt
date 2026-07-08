@@ -39,6 +39,7 @@ fun MainScreen(
         }
     }
 
+    // 存储权限对话框
     if (state.showStoragePermissionDialog) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissStoragePermissionDialog() },
@@ -60,6 +61,7 @@ fun MainScreen(
         )
     }
 
+    // 配置对话框
     if (state.showConfigDialog) {
         ConfigDialog(
             title = "请输入必要配置信息",
@@ -99,6 +101,7 @@ fun MainScreen(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // 修改配置按钮
             OutlinedButton(
                 onClick = { viewModel.openConfigDialog(modify = true) },
                 modifier = Modifier.fillMaxWidth(),
@@ -111,6 +114,7 @@ fun MainScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // 目标仓库地址
             OutlinedTextField(
                 value = state.repoUrl,
                 onValueChange = { viewModel.updateRepoUrl(it) },
@@ -122,6 +126,7 @@ fun MainScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // 本地源码路径 + 浏览
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -154,6 +159,7 @@ fun MainScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // 推送按钮
             Button(
                 onClick = {
                     viewModel.checkStoragePermission()
@@ -184,6 +190,7 @@ fun MainScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // 错误提示
             if (state.errorMessage.isNotEmpty()) {
                 Text(
                     text = state.errorMessage,
@@ -191,6 +198,7 @@ fun MainScreen(
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
+            // 状态消息
             if (state.statusMessage.isNotEmpty()) {
                 Text(
                     text = state.statusMessage,
@@ -199,7 +207,7 @@ fun MainScreen(
                 )
             }
 
-            // 日志输出区域
+            // 📋 日志输出区域（已修复：不再嵌套垂直滚动）
             if (state.logMessages.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
@@ -209,7 +217,9 @@ fun MainScreen(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 300.dp),   // 限定最大高度，避免无限测量
                     shape = RoundedCornerShape(8.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -218,7 +228,6 @@ fun MainScreen(
                     Column(
                         modifier = Modifier
                             .padding(8.dp)
-                            .verticalScroll(rememberScrollState())
                     ) {
                         state.logMessages.forEach { log ->
                             Text(
