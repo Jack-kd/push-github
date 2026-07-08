@@ -9,30 +9,26 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.jack.pushgithub.ui.MainScreen
 import com.jack.pushgithub.ui.theme.PushGithubTheme
 import com.jack.pushgithub.viewmodel.MainViewModel
 
 class MainActivity : ComponentActivity() {
 
-    // 将 ViewModel 声明为 Activity 的成员变量
-    private lateinit var mainViewModel: MainViewModel
+    // 使用 viewModels() 委托获取 ViewModel（非 Composable 方式）
+    private val mainViewModel: MainViewModel by viewModels()
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
-        // 从设置页面返回后，重新检查权限状态
         mainViewModel.checkStoragePermission()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        // 在 setContent 之前初始化 ViewModel
-        mainViewModel = viewModel()
 
         setContent {
             PushGithubTheme {
