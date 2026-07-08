@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -31,26 +32,31 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 设置全局未捕获异常处理器，防止应用直接闪退
-        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+        // 全局异常捕获（防止闪退）
+        Thread.setDefaultUncaughtExceptionHandler { _, throwable ->
             val sw = StringWriter()
             throwable.printStackTrace(PrintWriter(sw))
             val stackTrace = sw.toString()
             Log.e("PushGithub", "未捕获异常: $stackTrace")
-            // 把异常信息写入 ViewModel 的日志中
             mainViewModel.addLog("❌ 应用崩溃: ${throwable.message}")
             mainViewModel.addLog(stackTrace)
-            // 延迟一下，确保日志有机会更新到界面
             Thread.sleep(500)
-            // 仍然退出应用，但至少日志会保留在界面上（可在下次打开时查看）
             finish()
         }
 
         enableEdgeToEdge()
         setContent {
             PushGithubTheme {
+                // 启动时自动检测权限，无权限则立即跳转设置页
                 LaunchedEffect(Unit) {
                     mainViewModel.checkStoragePermission()
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        if (!Environment.isExternalStorageManager()) {
+                            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                            intent.data = Uri.parse("package:$packageName")
+                            requestPermissionLauncher.launch(intent)
+                        }
+                    }
                 }
 
                 MainScreen(
