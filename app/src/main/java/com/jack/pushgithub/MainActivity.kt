@@ -17,27 +17,31 @@ import com.jack.pushgithub.viewmodel.MainViewModel
 
 class MainActivity : ComponentActivity() {
 
+    // 将 ViewModel 声明为 Activity 的成员变量
+    private lateinit var mainViewModel: MainViewModel
+
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
         // 从设置页面返回后，重新检查权限状态
-        val vm = viewModel<MainViewModel>()  // 这里可以这样调用，因为在 Composable 之外
-        vm.checkStoragePermission()
+        mainViewModel.checkStoragePermission()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // 在 setContent 之前初始化 ViewModel
+        mainViewModel = viewModel()
+
         setContent {
             PushGithubTheme {
-                val viewModel: MainViewModel = viewModel()
-
                 LaunchedEffect(Unit) {
-                    viewModel.checkStoragePermission()
+                    mainViewModel.checkStoragePermission()
                 }
 
                 MainScreen(
-                    viewModel = viewModel,
+                    viewModel = mainViewModel,
                     onRequestStoragePermission = {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                             val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
