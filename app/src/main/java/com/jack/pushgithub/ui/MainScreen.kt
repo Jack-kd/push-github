@@ -91,8 +91,8 @@ fun MainScreen(
 
     Scaffold(
         topBar = {
-            // 标题栏高度降低，去除内边距，确保文字可见
-            TopAppBar(
+            // 使用 CenterAlignedTopAppBar，高度48dp，文字自动居中可见
+            CenterAlignedTopAppBar(
                 title = {
                     Text(
                         text = "Push to GitHub",
@@ -101,8 +101,7 @@ fun MainScreen(
                     )
                 },
                 modifier = Modifier.height(48.dp),
-                contentPadding = PaddingValues(vertical = 0.dp),
-                colors = TopAppBarDefaults.topAppBarColors(
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary
                 )
