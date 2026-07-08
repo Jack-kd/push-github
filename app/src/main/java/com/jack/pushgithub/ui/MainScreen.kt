@@ -91,28 +91,27 @@ fun MainScreen(
         )
     }
 
-        Scaffold(
-        Scaffold(
-    topBar = {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .height(56.dp)
-                .background(MaterialTheme.colorScheme.primary),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "Push to GitHub",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onPrimary,
-                textAlign = TextAlign.Center,
-                maxLines = 1
-            )
+    Scaffold(
+        topBar = {
+            // ----- 核心修改区域（不再使用 statusBarsPadding，而是把文字固定在头部） -----
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.TopCenter // 1. 改为顶部对齐
+            ) {
+                Text(
+                    text = "Push to GitHub",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    modifier = Modifier.padding(top = 30.dp) // 2. 增加 30dp 的顶部间距，刚好避开系统图标
+                )
+            }
         }
-    }
-
-) { paddingValues ->
+    ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
