@@ -18,6 +18,14 @@ android {
         multiDexEnabled = true
     }
 
+
+packagingOptions {
+    exclude("OSGI-INF/l10n/plugin.properties")
+}
+
+
+
+
     buildFeatures {
         compose = true
     }
