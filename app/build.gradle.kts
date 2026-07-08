@@ -20,7 +20,11 @@ android {
 
 
     packagingOptions {
-        exclude("OSGI-INF/l10n/plugin.properties")
+    resources.excludes.add("META-INF/DEPENDENCIES")
+    resources.excludes.add("META-INF/LICENSE*")
+    resources.excludes.add("META-INF/NOTICE*")
+    resources.excludes.add("META-INF/*.properties")
+    resources.excludes.add("OSGI-INF/*")
     }
 
 
