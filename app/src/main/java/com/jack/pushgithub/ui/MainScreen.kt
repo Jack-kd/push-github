@@ -93,11 +93,14 @@ fun MainScreen(
 
     Scaffold(
         topBar = {
-            // 自定义标题栏：完全居中的蓝色 Box
+            // ----- 修改点在这里 -----
+            // 1. 增加了 .statusBarsPadding()：预留出系统状态栏的高度，防止遮挡
+            // 2. 高度从 48.dp 改为 56.dp，获得更舒适的视觉比例
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp)
+                    .height(56.dp)
+                    .statusBarsPadding() 
                     .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
             ) {
