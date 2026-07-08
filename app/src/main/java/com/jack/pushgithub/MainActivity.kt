@@ -4,9 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.Environment
 import android.provider.Settings
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -22,8 +20,8 @@ class MainActivity : ComponentActivity() {
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
-        // 从设置页面返回后，可以再次检查权限状态
-        val vm = viewModel<MainViewModel>(this)
+        // 从设置页面返回后，重新检查权限状态
+        val vm = viewModel<MainViewModel>()  // 这里可以这样调用，因为在 Composable 之外
         vm.checkStoragePermission()
     }
 
@@ -33,12 +31,11 @@ class MainActivity : ComponentActivity() {
         setContent {
             PushGithubTheme {
                 val viewModel: MainViewModel = viewModel()
-                
-                // 首次打开时检查权限，如果没有则引导
+
                 LaunchedEffect(Unit) {
                     viewModel.checkStoragePermission()
                 }
-                
+
                 MainScreen(
                     viewModel = viewModel,
                     onRequestStoragePermission = {
