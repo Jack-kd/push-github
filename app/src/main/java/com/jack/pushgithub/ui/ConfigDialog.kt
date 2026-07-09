@@ -313,22 +313,55 @@ if(showTokenHelp){
 
 
                 Text(
-                    """
-                    1. 登录 GitHub
+    """
+    📌 GitHub Token 获取步骤
 
-                    2. 点击头像
 
-                    3. Settings
+    1️⃣ 登录 GitHub
 
-                    4. Developer settings
 
-                    5. Personal access tokens
+    2️⃣ 点击右上角头像
 
-                    6. 创建 Token
 
-                    7. 勾选 repo 权限
-                    """.trimIndent()
-                )
+    3️⃣ 进入 Settings（设置）
+
+
+    4️⃣ 找到 Developer settings
+
+
+    5️⃣ 点击 Personal access tokens
+
+
+    6️⃣ 点击 Tokens (classic)
+
+
+    7️⃣ 点击 Generate new token
+
+
+    8️⃣ 选择 Generate new token (classic)
+
+
+    9️⃣ 输入 GitHub 密码确认身份
+
+
+    🔟 在 Note 中填写名称
+       （名称可以随意填写）
+
+
+    1️⃣1️⃣ 选择 Token 有效时间
+
+
+    1️⃣2️⃣ 勾选 repo 权限
+
+
+    1️⃣3️⃣ 点击 Generate token
+
+
+    ⚠️ 注意：
+    Token 生成后只显示一次，
+    请及时复制保存。
+    """.trimIndent()
+)
 
 
                 Spacer(
