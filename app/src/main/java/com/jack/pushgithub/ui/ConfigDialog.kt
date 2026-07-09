@@ -411,13 +411,15 @@ Row(
 
         onClick = {
 
-            checking = false
+            clipboard.setText(
+                AnnotatedString(logs)
+            )
 
         }
 
     ){
 
-        Text("返回")
+        Text("复制日志")
 
     }
 
@@ -431,15 +433,13 @@ Row(
 
         onClick = {
 
-            clipboard.setText(
-                AnnotatedString(logs)
-            )
+            checking = false
 
         }
 
     ){
 
-        Text("复制日志")
+        Text("返回")
 
     }
 
