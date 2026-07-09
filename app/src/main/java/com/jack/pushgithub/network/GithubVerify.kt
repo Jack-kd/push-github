@@ -91,70 +91,8 @@ object GithubVerify {
 
 
 
-                val emailRequest =
-                    Request.Builder()
-                        .url(
-                            "https://api.github.com/user/emails"
-                        )
-                        .header(
-                            "Authorization",
-                            "Bearer $token"
-                        )
-                        .build()
-
-
-
-                val emailResponse =
-    client.newCall(
-        emailRequest
-    ).execute()
-
-
-log("正在检查邮箱信息...")
-
-
-val emailsJson =
-    emailResponse.body!!
-        .string()
-
-
-val emailArray =
-    org.json.JSONArray(emailsJson)
-
-
-var emailMatched = false
-
-
-for(i in 0 until emailArray.length()){
-
-    val item =
-        emailArray.getJSONObject(i)
-
-
-    if(item.optString("email") == email){
-
-        emailMatched = true
-
-        break
-
-    }
-
-}
-
-
-
-if(emailMatched){
-
-    log("邮箱信息匹配")
-
-}else{
-
-    log("未找到匹配邮箱，跳过邮箱验证")
-
-}
-
-
-log("邮箱检查完成")
+                log("邮箱信息检查跳过")
+                log("GitHub 不强制验证邮箱")
 
 
 
