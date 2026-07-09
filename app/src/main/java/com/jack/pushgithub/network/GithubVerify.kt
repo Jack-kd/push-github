@@ -155,9 +155,7 @@ if(emailMatched){
 
 
 log("邮箱检查完成")
-    return@withContext false
 
-}
 
 
 
