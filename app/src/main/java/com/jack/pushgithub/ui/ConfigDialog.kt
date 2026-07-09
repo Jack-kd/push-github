@@ -246,15 +246,98 @@ fun ConfigDialog(
 
 
 
-    // Token获取说明弹窗
-    if (showTokenHelp) {
+// Token获取说明弹窗
+if(showTokenHelp){
 
-        Dialog(
-            onDismissRequest = {
-                showTokenHelp = false
+    Dialog(
+        onDismissRequest = {
+            showTokenHelp=false
+        }
+    ){
+
+        Card(
+            modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+
+            shape =
+            RoundedCornerShape(16.dp)
+        ){
+
+            Column(
+                modifier =
+                Modifier.padding(24.dp)
+            ){
+
+
+                Text(
+                    "如何获取 GitHub Token",
+                    style =
+                    MaterialTheme.typography.titleLarge
+                )
+
+
+                Spacer(
+                    Modifier.height(16.dp)
+                )
+
+
+                Text(
+                    """
+                    1. 登录 GitHub
+
+                    2. 点击头像
+
+                    3. Settings
+
+                    4. Developer settings
+
+                    5. Personal access tokens
+
+                    6. 创建 Token
+
+                    7. 勾选 repo 权限
+                    """.trimIndent()
+                )
+
+
+                Spacer(
+                    Modifier.height(20.dp)
+                )
+
+
+                Row(
+                    modifier =
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement =
+                    Arrangement.End
+                ){
+
+                    Button(
+                        onClick={
+                            showTokenHelp=false
+                        }
+                    ){
+
+                        Text("知道了")
+
+                    }
+
+                }
+
+
             }
-        ) {
 
+        }
+
+    }
+
+}
+
+
+
+//验证日志弹窗
 if(checking){
 
     Dialog(
@@ -264,16 +347,14 @@ if(checking){
         Card{
 
             Column(
-                modifier = Modifier.padding(20.dp)
+                modifier =
+                Modifier.padding(20.dp)
             ){
 
-                Text(
-                    "正在验证"
-                )
+                Text("正在验证")
 
 
                 Spacer(
-                    modifier =
                     Modifier.height(10.dp)
                 )
 
@@ -290,98 +371,40 @@ if(checking){
 
 
 
+//验证结果弹窗
+if(showResult){
+
+    AlertDialog(
+
+        onDismissRequest = {
+            showResult=false
+        },
 
 
+        title = {
+            Text("验证结果")
+        },
 
 
+        text = {
+            Text(resultText)
+        },
 
 
+        confirmButton = {
 
-
-
-
-
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp),
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(8.dp)
-            ) {
-
-
-                Column(
-                    modifier = Modifier.padding(24.dp)
-                ) {
-
-
-                    Text(
-                        text = "如何获取 GitHub Token",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-
-
-                    Spacer(
-                        modifier = Modifier.height(16.dp)
-                    )
-
-
-                    Text(
-                        text =
-                        """
-                        1. 打开 GitHub 官网并登录账号。
-
-                        2. 点击右上角头像。
-
-                        3. 进入：
-                           Settings
-
-                        4. 找到：
-                           Developer settings
-
-                        5. 点击：
-                           Personal access tokens
-
-                        6. 创建新的 Token。
-
-                        7. 权限建议勾选：
-                           ✓ repo
-
-                        8. 创建完成后复制 Token。
-
-                        注意：
-                        Token只会显示一次，
-                        请及时保存。
-                        """.trimIndent(),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-
-
-                    Spacer(
-                        modifier = Modifier.height(24.dp)
-                    )
-
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-
-                        Button(
-                            onClick = {
-                                showTokenHelp = false
-                            },
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("知道了")
-                        }
-
-                    }
-
+            TextButton(
+                onClick={
+                    showResult=false
                 }
+            ){
+
+                Text("知道了")
 
             }
+
         }
-    }
+
+    )
+
 }
