@@ -325,7 +325,6 @@ if(showTokenHelp){
 
     }
 
-}
 
 }
 
