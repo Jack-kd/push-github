@@ -57,14 +57,13 @@ object GithubVerify {
 
 
 
-                val body =
-                    response.body?.string()
-                        ?: return@withContext false
-
+                val body: String =
+             response.body?.string()
+            ?: return@withContext false
 
 
                 val json =
-                    JSONObject(body)
+                JSONObject(body)
 
 
 
@@ -120,19 +119,42 @@ object GithubVerify {
 
 
 
-                val emails =
-                    emailResponse.body!!
-                        .string()
+                val emailsJson =
+    emailResponse.body!!
+        .string()
+
+
+val emailArray =
+    org.json.JSONArray(emailsJson)
+
+
+var emailMatched = false
+
+
+for(i in 0 until emailArray.length()){
+
+    val item =
+        emailArray.getJSONObject(i)
+
+
+    if(item.optString("email") == email){
+
+        emailMatched = true
+        break
+
+    }
+
+}
 
 
 
-                if(!emails.contains(email)){
+if(!emailMatched){
 
-                    log("邮箱不一致")
+    log("邮箱不一致")
 
-                    return@withContext false
+    return@withContext false
 
-                }
+}
 
 
 
