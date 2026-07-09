@@ -111,11 +111,15 @@ object GithubVerify {
 
 
 
-                if(!emailResponse.isSuccessful){
+                if(emailMatched){
 
-                    log("邮箱验证失败")
-                    return@withContext false
-                }
+        log("邮箱验证通过")
+
+    }else{
+
+        log("未找到邮箱信息，跳过邮箱验证")
+
+    }
 
 
 
