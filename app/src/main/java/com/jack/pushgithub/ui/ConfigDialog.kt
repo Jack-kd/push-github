@@ -9,6 +9,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,7 +37,6 @@ fun ConfigDialog(
     var token by remember { mutableStateOf(initialToken) }
 
 
-
     //新增
     var checking by remember {
         mutableStateOf(false)
@@ -43,6 +45,10 @@ fun ConfigDialog(
     var logs by remember {
         mutableStateOf("")
     }
+
+    val clipboard =
+        LocalClipboardManager.current
+
 
     var showResult by remember {
         mutableStateOf(false)
@@ -184,30 +190,61 @@ fun ConfigDialog(
 
 
             val result =
-                GithubVerify.verify(
-                    username.trim(),
-                    email.trim(),
-                    token.trim()
-                ){
+    GithubVerify.verify(
+        username.trim(),
+        email.trim(),
+        token.trim()
+    ){
 
-                    logs += "$it\n"
+        logs += "$it\n"
 
-                }
-
-
-            checking = false
+    }
 
 
-            resultText =
-                if(result){
 
-                    "检验正确"
+if(result){
 
-                }else{
+    logs += "\n====================\n"
+    logs += "✅ 验证成功\n"
+    logs += "====================\n"
 
-                    "检验失败，请检查配置信息是否正确"
 
-                }
+    // 等待用户看到成功日志
+    kotlinx.coroutines.delay(1000)
+
+
+    // 自动关闭日志弹窗
+    checking = false
+
+
+
+}else{
+
+
+    logs += "\n====================\n"
+    logs += "❌ 验证失败\n"
+    logs += "请检查配置信息是否正确\n"
+    logs += "====================\n"
+
+
+    //失败不自动关闭
+    //用户点击空白关闭
+
+
+}
+
+
+
+resultText =
+    if(result){
+
+        "检验正确"
+
+    }else{
+
+        "检验失败，请检查配置信息是否正确"
+
+    }
 
 
             showResult = true
@@ -329,7 +366,15 @@ if(showTokenHelp){
 if(checking){
 
     Dialog(
-        onDismissRequest = {}
+        onDismissRequest = {
+
+            if(!logs.contains("验证完成")){
+
+                checking=false
+
+            }
+
+        }
     ){
 
         Card{
@@ -348,6 +393,37 @@ if(checking){
 
 
                 Text(logs)
+
+Spacer(
+    Modifier.height(20.dp)
+)
+
+
+Row(
+    modifier =
+    Modifier.fillMaxWidth(),
+
+    horizontalArrangement =
+    Arrangement.End
+){
+
+    Button(
+
+        onClick = {
+
+            clipboard.setText(
+                AnnotatedString(logs)
+            )
+
+        }
+
+    ){
+
+        Text("复制日志")
+
+    }
+
+}
 
             }
 
