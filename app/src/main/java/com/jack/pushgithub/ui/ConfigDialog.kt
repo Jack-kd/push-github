@@ -300,29 +300,30 @@ if(showTokenHelp){
 
 
                 Row(
-                    modifier =
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement =
-                    Arrangement.End
-                ){
-
-                    Button(
-    onClick = {
-        showTokenHelp = false
-    }
+    modifier = Modifier.fillMaxWidth(),
+    horizontalArrangement = Arrangement.End
 ){
 
-    Text("知道了")
+    Button(
+        onClick = {
+            showTokenHelp = false
+        }
+    ){
+
+        Text("知道了")
+
+    }
 
 }
 
-            }
+            }   // Column结束
 
-        }
+        }       // Card结束
 
-    }
+    }           // Dialog结束
 
-    }
+}               // if(showTokenHelp)结束
+
 
 //验证日志弹窗
 if(checking){
@@ -394,4 +395,8 @@ if(showResult){
 
     )
 
+}
+
+
+//关闭 ConfigDialog
 }
