@@ -171,76 +171,66 @@ fun ConfigDialog(
 
 
                     Button(
+    onClick = {
 
-        onClick = {
-    
-    
-            checking = true
-    
-            logs = "开始验证...\n"
-    
-    
-    
-            CoroutineScope(
-                Dispatchers.Main
-            ).launch {
-    
-    
-                val result =
-                    GithubVerify.verify(
-                        username.trim(),
-                        email.trim(),
-                        token.trim()
-                    ){
+        checking = true
 
-                        logs += it + "\n"
-    
-                    }
-    
+        logs = "开始验证...\n"
 
-    
-                checking = false
-    
-    
-    
-                resultText =
-                    if(result){
-    
-                        "检验正确"
 
-                    }else{
+        CoroutineScope(
+            Dispatchers.Main
+        ).launch {
 
-                        "检验失败，请检查配置信息是否正确"
 
-                    }
+            val result =
+                GithubVerify.verify(
+                    username.trim(),
+                    email.trim(),
+                    token.trim()
+                ){
 
-    
-    
-                showResult = true
-    
+                    logs += "$it\n"
 
-    
-                if(result){
-
-                    onPositive(
-                        email.trim(),
-                        username.trim(),
-                        token.trim()
-                    )
-    
                 }
 
-    
+
+            checking = false
+
+
+            resultText =
+                if(result){
+
+                    "检验正确"
+
+                }else{
+
+                    "检验失败，请检查配置信息是否正确"
+
+                }
+
+
+            showResult = true
+
+
+            if(result){
+
+                onPositive(
+                    email.trim(),
+                    username.trim(),
+                    token.trim()
+                )
+
             }
 
-    
         }
 
-    ){
+    }
+){
 
-        Text("确定")
+    Text("确定")
 
-                        }
+                    }
                 }
             }
         }
