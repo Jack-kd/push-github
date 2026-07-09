@@ -3,7 +3,6 @@ package com.jack.pushgithub.ui
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,7 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.documentfile.provider.DocumentFile
@@ -93,22 +91,13 @@ fun MainScreen(
 
     Scaffold(
         topBar = {
-            // 自定义标题栏：完全居中的蓝色 Box
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .background(MaterialTheme.colorScheme.primary),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Push to GitHub",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1
+            TopAppBar(
+                title = { Text("Push to GitHub") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary
                 )
-            }
+            )
         }
     ) { paddingValues ->
         Column(
@@ -223,7 +212,7 @@ fun MainScreen(
                 }
             }
 
-            // 日志区域
+            // 日志区域（占据剩余空间）
             if (state.logMessages.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -243,15 +232,18 @@ fun MainScreen(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
+                // 日志滚动状态定义在 Box 外部，方便底部按钮访问
                 val scrollState = rememberScrollState()
                 var autoScroll by remember { mutableStateOf(true) }
 
+                // 监听手动滚动：一旦用户触摸滚动，停止自动滚动
                 LaunchedEffect(scrollState.isScrollInProgress) {
                     if (scrollState.isScrollInProgress) {
                         autoScroll = false
                     }
                 }
 
+                // 新日志出现且允许自动滚动时，滚到底部
                 LaunchedEffect(state.logMessages.size) {
                     if (autoScroll && state.logMessages.isNotEmpty()) {
                         scrollState.animateScrollTo(scrollState.maxValue)
@@ -291,6 +283,7 @@ fun MainScreen(
                     }
                 }
 
+                // 底部控制按钮：左“回到底部”，右“复制日志”
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
