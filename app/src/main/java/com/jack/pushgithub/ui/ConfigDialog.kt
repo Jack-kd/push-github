@@ -307,17 +307,14 @@ if(showTokenHelp){
                 ){
 
                     Button(
-                        onClick={
-                            showTokenHelp=false
-                        }
-                    ){
+    onClick = {
+        showTokenHelp = false
+    }
+){
 
-                        Text("知道了")
+    Text("知道了")
 
-                    }
-
-                }
-
+}
 
             }
 
@@ -325,8 +322,7 @@ if(showTokenHelp){
 
     }
 
-
-}
+    }
 
 //验证日志弹窗
 if(checking){
