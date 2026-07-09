@@ -10,6 +10,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+
+
 
 @Composable
 fun ConfigDialog(
@@ -26,6 +31,24 @@ fun ConfigDialog(
     var username by remember { mutableStateOf(initialUsername) }
     var token by remember { mutableStateOf(initialToken) }
 
+
+
+    //新增
+    var checking by remember {
+        mutableStateOf(false)
+    }
+
+    var logs by remember {
+        mutableStateOf("")
+    }
+
+    var showResult by remember {
+        mutableStateOf(false)
+    }
+    
+    var resultText by remember {
+        mutableStateOf("")
+    }
     // 控制Token说明弹窗
     var showTokenHelp by remember {
         mutableStateOf(false)
@@ -146,20 +169,76 @@ fun ConfigDialog(
 
 
                     Button(
-                        onClick = {
-                            onPositive(
-                                email.trim(),
-                                username.trim(),
-                                token.trim()
-                            )
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        enabled = email.isNotBlank()
-                                && username.isNotBlank()
-                                && token.isNotBlank()
-                    ) {
-                        Text("确定")
+
+        onClick = {
+    
+    
+            checking = true
+    
+            logs = "开始验证...\n"
+    
+    
+    
+            CoroutineScope(
+                Dispatchers.Main
+            ).launch {
+    
+    
+                val result =
+                    GithubVerify.verify(
+                        username.trim(),
+                        email.trim(),
+                        token.trim()
+                    ){
+
+                        logs += it + "\n"
+    
                     }
+    
+
+    
+                checking = false
+    
+    
+    
+                resultText =
+                    if(result){
+    
+                        "检验正确"
+
+                    }else{
+
+                        "检验失败，请检查配置信息是否正确"
+
+                    }
+
+    
+    
+                showResult = true
+    
+
+    
+                if(result){
+
+                    onPositive(
+                        email.trim(),
+                        username.trim(),
+                        token.trim()
+                    )
+    
+                }
+
+    
+            }
+
+    
+        }
+
+    ){
+
+        Text("确定")
+
+                        }
                 }
             }
         }
@@ -175,6 +254,51 @@ fun ConfigDialog(
                 showTokenHelp = false
             }
         ) {
+
+if(checking){
+
+    Dialog(
+        onDismissRequest = {}
+    ){
+
+        Card{
+
+            Column(
+                modifier = Modifier.padding(20.dp)
+            ){
+
+                Text(
+                    "正在验证"
+                )
+
+
+                Spacer(
+                    modifier =
+                    Modifier.height(10.dp)
+                )
+
+
+                Text(logs)
+
+            }
+
+        }
+
+    }
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
             Card(
