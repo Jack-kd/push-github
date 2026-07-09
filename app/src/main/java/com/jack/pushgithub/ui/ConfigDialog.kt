@@ -337,7 +337,7 @@ if(showTokenHelp){
 
 }
 
-
+}
 
 //验证日志弹窗
 if(checking){
