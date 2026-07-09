@@ -105,25 +105,15 @@ object GithubVerify {
 
 
                 val emailResponse =
-                    client.newCall(
-                        emailRequest
-                    ).execute()
+    client.newCall(
+        emailRequest
+    ).execute()
 
 
-
-                if(emailMatched){
-
-        log("邮箱验证通过")
-
-    }else{
-
-        log("未找到邮箱信息，跳过邮箱验证")
-
-    }
+log("正在检查邮箱信息...")
 
 
-
-                val emailsJson =
+val emailsJson =
     emailResponse.body!!
         .string()
 
@@ -144,6 +134,7 @@ for(i in 0 until emailArray.length()){
     if(item.optString("email") == email){
 
         emailMatched = true
+
         break
 
     }
@@ -152,10 +143,18 @@ for(i in 0 until emailArray.length()){
 
 
 
-if(!emailMatched){
+if(emailMatched){
 
-    log("邮箱不一致")
+    log("邮箱信息匹配")
 
+}else{
+
+    log("未找到匹配邮箱，跳过邮箱验证")
+
+}
+
+
+log("邮箱检查完成")
     return@withContext false
 
 }
