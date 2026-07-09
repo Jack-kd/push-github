@@ -411,6 +411,26 @@ Row(
 
         onClick = {
 
+            checking = false
+
+        }
+
+    ){
+
+        Text("返回")
+
+    }
+
+
+    Spacer(
+        Modifier.width(10.dp)
+    )
+
+
+    Button(
+
+        onClick = {
+
             clipboard.setText(
                 AnnotatedString(logs)
             )
