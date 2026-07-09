@@ -71,7 +71,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("androidx.documentfile:documentfile:1.0.1")
     implementation("androidx.multidex:multidex:2.0.1")
-
+    implementation ("com.squareup.okhttp3:okhttp:4.12.0")
     // JGit
     implementation("org.eclipse.jgit:org.eclipse.jgit:6.8.0.202311291450-r")
     implementation("org.eclipse.jgit:org.eclipse.jgit.ssh.apache:6.8.0.202311291450-r")
