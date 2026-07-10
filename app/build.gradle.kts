@@ -5,7 +5,11 @@ plugins {
 
 android {
     namespace = "com.jack.pushgithub"
-    compileSdk = 34
+    compileSdk = 35
+
+    buildFeatures {
+        compose = true
+    }
 
     defaultConfig {
         applicationId = "com.jack.pushgithub"
@@ -16,8 +20,7 @@ android {
         multiDexEnabled = true
     }
 
-    // 使用新名称 packaging，并明确排除冲突文件
-        packaging {
+    packaging {
         resources {
             pickFirsts += setOf(
                 "OSGI-INF/l10n/plugin.properties",
@@ -27,10 +30,6 @@ android {
                 "META-INF/*.properties"
             )
         }
-    }
-
-    buildFeatures {
-        compose = true
     }
 
     composeOptions {

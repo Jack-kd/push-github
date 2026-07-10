@@ -3,16 +3,21 @@ package com.jack.pushgithub.ui
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.*
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -166,32 +171,53 @@ fun MainScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                Button(
-                    onClick = {
-                        viewModel.checkStoragePermission()
-                        if (state.hasStoragePermission) {
-                            viewModel.startPush()
-                        } else {
-                            viewModel.showStoragePermissionDialog()
-                        }
-                    },
+                Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    enabled = !state.isWorking
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    if (state.isWorking) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("推送中...")
-                    } else {
-                        Text("开始推送", style = MaterialTheme.typography.labelLarge)
+
+
+                    Button(
+                        onClick = {
+                            viewModel.clearGithubRepository()
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(50.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("清空项目")
                     }
+
+
+
+                    Button(
+                        onClick = {
+
+                            viewModel.checkStoragePermission()
+
+                            if (state.hasStoragePermission) {
+
+                                viewModel.startPush()
+
+                            } else {
+
+                                viewModel.showStoragePermissionDialog()
+
+                            }
+
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(50.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+
+                        Text("开始推送")
+
+                    }
+
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -216,6 +242,29 @@ fun MainScreen(
             if (state.logMessages.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
 
+                if (state.progressVisible) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 28.dp)
+                    ){
+                        LinearProgressIndicator(
+                            progress = {
+                                state.progress / 100f
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(10.dp)
+                        )
+
+                        Text(
+                            text = "${state.progress}%",
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                        )
+                    }
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -233,20 +282,27 @@ fun MainScreen(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 // 日志滚动状态定义在 Box 外部，方便底部按钮访问
-                val scrollState = rememberScrollState()
+                val lazyListState = rememberLazyListState()
                 var autoScroll by remember { mutableStateOf(true) }
 
-                // 监听手动滚动：一旦用户触摸滚动，停止自动滚动
-                LaunchedEffect(scrollState.isScrollInProgress) {
-                    if (scrollState.isScrollInProgress) {
-                        autoScroll = false
+                // 判断当前是否在日志最底部
+                LaunchedEffect(lazyListState) {
+                    val lastVisibleItem = lazyListState.layoutInfo.visibleItemsInfo.lastOrNull()
+                    val totalItems = lazyListState.layoutInfo.totalItemsCount
+                    if (totalItems > 0) {
+                        autoScroll = lastVisibleItem?.index == totalItems - 1
                     }
                 }
 
                 // 新日志出现且允许自动滚动时，滚到底部
                 LaunchedEffect(state.logMessages.size) {
-                    if (autoScroll && state.logMessages.isNotEmpty()) {
-                        scrollState.animateScrollTo(scrollState.maxValue)
+                    if (
+                        autoScroll &&
+                        state.logMessages.isNotEmpty()
+                    ) {
+                        lazyListState.animateScrollToItem(
+                            state.logMessages.takeLast(300).size - 1
+                        )
                     }
                 }
 
@@ -262,22 +318,21 @@ fun MainScreen(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant
                         )
                     ) {
-                        SelectionContainer {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .verticalScroll(scrollState)
-                                    .padding(8.dp)
-                            ) {
-                                state.logMessages.forEach { log ->
-                                    Text(
-                                        text = log,
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        lineHeight = 18.sp,
-                                        modifier = Modifier.padding(vertical = 2.dp)
-                                    )
-                                }
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(350.dp)
+                        ) {
+                            items(
+                                state.logMessages.takeLast(300)
+                            ) { log ->
+                                Text(
+                                    text = log,
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    lineHeight = 18.sp,
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                )
                             }
                         }
                     }
@@ -291,14 +346,23 @@ fun MainScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (!autoScroll) {
-                        TextButton(onClick = {
-                            autoScroll = true
-                            coroutineScope.launch {
-                                scrollState.animateScrollTo(scrollState.maxValue)
+
+                        TextButton(
+                            onClick = {
+
+                                coroutineScope.launch {
+
+                                    lazyListState.animateScrollToItem(
+                                        state.logMessages.takeLast(300).size - 1
+                                    )
+
+                                }
+
                             }
-                        }) {
+                        ) {
                             Text("回到底部")
                         }
+
                     } else {
                         Spacer(modifier = Modifier.width(1.dp))
                     }

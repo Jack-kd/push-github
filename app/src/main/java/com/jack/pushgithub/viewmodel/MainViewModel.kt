@@ -10,11 +10,15 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.jack.pushgithub.data.ConfigRepository
 import com.jack.pushgithub.data.GitConfig
+import com.jack.pushgithub.github.GithubApi
 import com.jack.pushgithub.git.GitHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
 import java.io.PrintWriter
 import java.io.StringWriter
 
@@ -31,7 +35,10 @@ data class MainUiState(
     val errorMessage: String = "",
     val hasStoragePermission: Boolean = false,
     val showStoragePermissionDialog: Boolean = false,
-    val logMessages: List<String> = emptyList()
+    val logMessages: List<String> = emptyList(),
+
+    val progressVisible: Boolean = false,
+    val progress: Int = 0
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -40,17 +47,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val uiState: StateFlow<MainUiState> = _uiState
 
     init {
-        val savedConfig = repository.loadConfig()
-        val hasConfig = repository.hasConfig()
-        _uiState.update {
-            it.copy(
-                config = savedConfig,
-                hasConfig = hasConfig,
-                showConfigDialog = !hasConfig,
-                isFirstTime = !hasConfig
-            )
+        viewModelScope.launch {
+            loadConfig()
         }
         checkStoragePermission()
+    }
+
+    private suspend fun loadConfig() {
+        val config = repository.loadConfig()
+        val hasConfig = repository.hasConfig()
+        _uiState.value = _uiState.value.copy(
+            config = config,
+            hasConfig = hasConfig,
+            showConfigDialog = !hasConfig,
+            isFirstTime = !hasConfig
+        )
     }
 
     fun addLog(message: String) {
@@ -63,7 +74,123 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(logMessages = emptyList()) }
     }
 
-    // 配置相关方法（openConfigDialog, dismissConfigDialog, saveConfig, updateRepoUrl 等保持不变，这里省略不重复）
+    fun clearGithubRepository() {
+
+        viewModelScope.launch {
+
+            _uiState.value = _uiState.value.copy(
+                progressVisible = true,
+                progress = 0
+            )
+
+            try {
+
+                addLog("开始清空GitHub仓库...")
+
+
+                val repoUrl =
+                    _uiState.value.repoUrl
+
+
+                if (repoUrl.isBlank()) {
+
+                    addLog("错误：请输入目标地址")
+
+                    return@launch
+                }
+
+
+                val token =
+                    repository.loadConfig().token
+
+
+                if (token.isBlank()) {
+
+                    addLog("错误：没有GitHub Token")
+
+                    return@launch
+                }
+
+
+
+                val repoUrlStr =
+                    repoUrl
+                        .replace("https://github.com/", "")
+                        .removeSuffix(".git")
+
+                val parts = repoUrlStr.split("/")
+                val owner = parts.getOrNull(0) ?: ""
+                val repo = parts.getOrNull(1) ?: ""
+
+                if (owner.isBlank() || repo.isBlank()) {
+                    addLog("错误：无效的仓库地址")
+                    return@launch
+                }
+
+                withContext(Dispatchers.IO) {
+                    com.jack.pushgithub.github.GithubApi(token).clearRepository(
+                        owner,
+                        repo,
+                        token,
+                        { message ->
+                            addLog(message)
+                        },
+                        { percent ->
+                            _uiState.value = _uiState.value.copy(progress = percent)
+                        }
+                    )
+                    _uiState.value = _uiState.value.copy(progress = 100)
+                    delay(800)
+                    _uiState.value = _uiState.value.copy(
+                        progressVisible = false,
+                        progress = 0
+                    )
+                }
+
+            } catch (e: Exception) {
+
+                addLog("========== 清空失败 ==========")
+
+                addLog(
+                    "错误类型: ${e.javaClass.name}"
+                )
+
+                addLog(
+                    "错误信息: ${e.message ?: "无错误信息"}"
+                )
+
+
+                e.stackTrace.take(5).forEach {
+
+                    addLog(
+                        "位置: $it"
+                    )
+
+                }
+
+
+                if (e.cause != null) {
+
+                    addLog(
+                        "原因: ${e.cause?.javaClass?.name}"
+                    )
+
+                    addLog(
+                        "原因信息: ${e.cause?.message ?: "无"}"
+                    )
+
+                }
+
+
+                addLog("==============================")
+
+            }
+
+        }
+
+    }
+
+    // 配置相关方法
     fun openConfigDialog(modify: Boolean = false) {
         _uiState.update { it.copy(showConfigDialog = true, isFirstTime = !modify) }
     }
@@ -157,6 +284,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update { it.copy(isWorking = true, errorMessage = "", statusMessage = "准备中...") }
 
             viewModelScope.launch {
+                _uiState.value = _uiState.value.copy(
+                    progressVisible = true,
+                    progress = 0
+                )
                 try {
                     val result = GitHelper.pushSourceToRepo(
                         context = getApplication(),
@@ -167,11 +298,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         onProgress = { msg ->
                             addLog(msg)
                             _uiState.update { it.copy(statusMessage = msg) }
+                            when {
+                                msg.contains("克隆成功") -> {
+                                    _uiState.value = _uiState.value.copy(progress = 20)
+                                }
+                                msg.contains("文件复制完成") -> {
+                                    _uiState.value = _uiState.value.copy(progress = 50)
+                                }
+                                msg.contains("提交") && msg.contains("更改") -> {
+                                    _uiState.value = _uiState.value.copy(progress = 80)
+                                }
+                                msg.contains("推送成功") -> {
+                                    _uiState.value = _uiState.value.copy(progress = 100)
+                                }
+                            }
                         }
                     )
                     result.onSuccess { msg ->
                         addLog("✅ $msg")
                         _uiState.update { it.copy(isWorking = false, statusMessage = msg, errorMessage = "") }
+                        kotlinx.coroutines.delay(800)
+                        _uiState.value = _uiState.value.copy(
+                            progressVisible = false,
+                            progress = 0
+                        )
                     }.onFailure { e ->
                         val sw = StringWriter()
                         e.printStackTrace(PrintWriter(sw))

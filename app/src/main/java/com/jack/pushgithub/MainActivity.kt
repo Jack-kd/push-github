@@ -32,6 +32,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        window.setSoftInputMode(
+            android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+        )
+
         // 全局异常捕获（防止闪退）
         Thread.setDefaultUncaughtExceptionHandler { _, throwable ->
             val sw = StringWriter()
@@ -46,7 +50,13 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
         setContent {
+
             PushGithubTheme {
+
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+
+                }
+
                 // 启动时自动检测权限，无权限则立即跳转设置页
                 LaunchedEffect(Unit) {
                     mainViewModel.checkStoragePermission()
@@ -70,6 +80,7 @@ class MainActivity : ComponentActivity() {
                     }
                 )
             }
+
         }
     }
 }
