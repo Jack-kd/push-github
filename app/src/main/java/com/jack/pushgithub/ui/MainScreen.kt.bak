@@ -287,7 +287,7 @@ fun MainScreen(
                         style = MaterialTheme.typography.titleSmall
                     )
                     TextButton(onClick = { viewModel.clearLog() }) {
-                        Text("清空")
+                        Text("清空日志")
                     }
                 }
 
