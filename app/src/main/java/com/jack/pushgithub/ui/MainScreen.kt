@@ -16,7 +16,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -243,24 +245,34 @@ fun MainScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 if (state.progressVisible) {
-                    Column(
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 28.dp)
-                    ){
-                        LinearProgressIndicator(
-                            progress = {
-                                state.progress / 100f
-                            },
+                            .height(26.dp)
+                            .clip(CircleShape)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant
+                            )
+                    ) {
+
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .height(10.dp)
+                                .fillMaxHeight()
+                                .fillMaxWidth(state.progress / 100f)
+                                .clip(CircleShape)
+                                .background(
+                                    MaterialTheme.colorScheme.primary
+                                )
                         )
 
                         Text(
                             text = "${state.progress}%",
                             modifier = Modifier
-                                .align(Alignment.CenterHorizontally)
+                                .align(Alignment.CenterEnd)
+                                .padding(end = 10.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            fontSize = 13.sp
                         )
                     }
                 }
