@@ -13,6 +13,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.BasicTextField
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -97,17 +98,11 @@ fun ConfigDialog(
                 )
 
 
-                OutlinedTextField(
+                BasicTextField(
                     value = email,
-                    onValueChange = {
-                        email = it
-                    },
-                    label = {
-                        Text("邮箱")
-                    },
+                    onValueChange = { email = it },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    modifier = Modifier.fillMaxWidth()
                 )
 
 
@@ -116,17 +111,11 @@ fun ConfigDialog(
                 )
 
 
-                OutlinedTextField(
+                BasicTextField(
                     value = username,
-                    onValueChange = {
-                        username = it
-                    },
-                    label = {
-                        Text("用户名")
-                    },
+                    onValueChange = { username = it },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    modifier = Modifier.fillMaxWidth()
                 )
 
 
@@ -135,18 +124,12 @@ fun ConfigDialog(
                 )
 
 
-                OutlinedTextField(
+                BasicTextField(
                     value = token,
-                    onValueChange = {
-                        token = it
-                    },
-                    label = {
-                        Text("Token")
-                    },
+                    onValueChange = { token = it },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    modifier = Modifier.fillMaxWidth()
                 )
 
 
