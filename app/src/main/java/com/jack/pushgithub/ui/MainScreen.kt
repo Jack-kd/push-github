@@ -11,7 +11,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
@@ -129,11 +128,13 @@ fun MainScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                BasicTextField(
+                OutlinedTextField(
                     value = state.repoUrl,
                     onValueChange = { viewModel.updateRepoUrl(it) },
+                    label = { Text("目标地址 (如 https://github.com/Jack-kd/cs)") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -142,11 +143,21 @@ fun MainScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    BasicTextField(
+                    OutlinedTextField(
                         value = state.sourceDirDisplayName,
                         onValueChange = { viewModel.updateSourceDirManually(it) },
+                        label = { Text("本地源码地址") },
                         singleLine = true,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        readOnly = false,
+                        trailingIcon = {
+                            if (state.sourceDirUri != null) {
+                                TextButton(onClick = { viewModel.clearSourceDir() }) {
+                                    Text("清除")
+                                }
+                            }
+                        }
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     IconButton(onClick = { folderPicker.launch(null) }) {
