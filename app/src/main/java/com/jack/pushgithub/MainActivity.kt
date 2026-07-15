@@ -12,7 +12,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import com.jack.pushgithub.BuildConfig
+import com.jack.pushgithub.notification.PushNotificationHelper
 import com.jack.pushgithub.ui.MainScreen
 import com.jack.pushgithub.ui.theme.PushGithubTheme
 import com.jack.pushgithub.viewmodel.MainViewModel
@@ -32,20 +37,27 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // 创建通知渠道
+        PushNotificationHelper.createChannel(this)
+
         window.setSoftInputMode(
             android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
         )
 
-        // 全局异常捕获（防止闪退）
-        Thread.setDefaultUncaughtExceptionHandler { _, throwable ->
+        // 全局异常捕获（链式传递，保留系统崩溃报告）
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             val sw = StringWriter()
             throwable.printStackTrace(PrintWriter(sw))
             val stackTrace = sw.toString()
             Log.e("PushGithub", "未捕获异常: $stackTrace")
             mainViewModel.addLog("❌ 应用崩溃: ${throwable.message}")
-            mainViewModel.addLog(stackTrace)
-            Thread.sleep(500)
-            finish()
+            // Release 版本不暴露完整堆栈
+            if (BuildConfig.DEBUG) {
+                mainViewModel.addLog(stackTrace)
+            }
+            // 链式调用默认处理器，保证崩溃报告正常上报
+            defaultHandler?.uncaughtException(thread, throwable)
         }
 
         enableEdgeToEdge()
@@ -53,19 +65,24 @@ class MainActivity : ComponentActivity() {
 
             PushGithubTheme {
 
-                androidx.compose.runtime.LaunchedEffect(Unit) {
-
-                }
-
-                // 启动时自动检测权限，无权限则立即跳转设置页
-                LaunchedEffect(Unit) {
-                    mainViewModel.checkStoragePermission()
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        if (!Environment.isExternalStorageManager()) {
-                            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                            intent.data = Uri.parse("package:$packageName")
-                            requestPermissionLauncher.launch(intent)
+                // 每次打开/回到软件时自动检测权限，无权限则跳转设置页
+                val lifecycleOwner = LocalLifecycleOwner.current
+                DisposableEffect(lifecycleOwner) {
+                    val observer = LifecycleEventObserver { _, event ->
+                        if (event == Lifecycle.Event.ON_RESUME) {
+                            mainViewModel.checkStoragePermission()
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                if (!Environment.isExternalStorageManager()) {
+                                    val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                                    intent.data = Uri.parse("package:$packageName")
+                                    requestPermissionLauncher.launch(intent)
+                                }
+                            }
                         }
+                    }
+                    lifecycleOwner.lifecycle.addObserver(observer)
+                    onDispose {
+                        lifecycleOwner.lifecycle.removeObserver(observer)
                     }
                 }
 

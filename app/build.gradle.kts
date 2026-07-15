@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.kapt")
 }
 
 android {
@@ -9,6 +10,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     defaultConfig {
@@ -70,11 +72,23 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("androidx.documentfile:documentfile:1.0.1")
     implementation("androidx.multidex:multidex:2.0.1")
-    implementation ("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     // JGit
     implementation("org.eclipse.jgit:org.eclipse.jgit:6.8.0.202311291450-r")
     implementation("org.eclipse.jgit:org.eclipse.jgit.ssh.apache:6.8.0.202311291450-r")
     implementation("org.slf4j:slf4j-simple:1.7.36")
+    // Room
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    kapt("androidx.room:room-compiler:2.6.1")
+    // WorkManager
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
+    // Navigation Compose
+    implementation("androidx.navigation:navigation-compose:2.7.7")
 
     debugImplementation("androidx.compose.ui:ui-tooling:1.6.0")
+
+    // R8: errorprone annotations needed by Tink
+    compileOnly("com.google.errorprone:error_prone_annotations:2.23.0")
 }

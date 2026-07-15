@@ -1,25 +1,20 @@
 package com.jack.pushgithub.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import com.jack.pushgithub.network.GithubVerify
-
-
 
 
 @Composable
@@ -37,31 +32,18 @@ fun ConfigDialog(
     var username by remember { mutableStateOf(initialUsername) }
     var token by remember { mutableStateOf(initialToken) }
 
+    var checking by remember { mutableStateOf(false) }
+    var logs by remember { mutableStateOf("") }
 
-    //新增
-    var checking by remember {
-        mutableStateOf(false)
-    }
+    val clipboard = LocalClipboardManager.current
 
-    var logs by remember {
-        mutableStateOf("")
-    }
+    var showResult by remember { mutableStateOf(false) }
+    var resultText by remember { mutableStateOf("") }
 
-    val clipboard =
-        LocalClipboardManager.current
+    var showTokenHelp by remember { mutableStateOf(false) }
 
-
-    var showResult by remember {
-        mutableStateOf(false)
-    }
-    
-    var resultText by remember {
-        mutableStateOf("")
-    }
-    // 控制Token说明弹窗
-    var showTokenHelp by remember {
-        mutableStateOf(false)
-    }
+    // 使用 rememberCoroutineScope 避免协程泄漏
+    val coroutineScope = rememberCoroutineScope()
 
 
     Dialog(
@@ -84,190 +66,106 @@ fun ConfigDialog(
                 modifier = Modifier.padding(24.dp)
             ) {
 
-
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.primary
                 )
 
-
-                Spacer(
-                    modifier = Modifier.height(16.dp)
-                )
-
+                Spacer(modifier = Modifier.height(16.dp))
 
                 OutlinedTextField(
                     value = email,
-                    onValueChange = {
-                        email = it
-                    },
-                    label = {
-                        Text("邮箱")
-                    },
+                    onValueChange = { email = it },
+                    label = { Text("邮箱") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
 
-
-                Spacer(
-                    modifier = Modifier.height(12.dp)
-                )
-
+                Spacer(modifier = Modifier.height(12.dp))
 
                 OutlinedTextField(
                     value = username,
-                    onValueChange = {
-                        username = it
-                    },
-                    label = {
-                        Text("用户名")
-                    },
+                    onValueChange = { username = it },
+                    label = { Text("用户名") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
 
-
-                Spacer(
-                    modifier = Modifier.height(12.dp)
-                )
-
+                Spacer(modifier = Modifier.height(12.dp))
 
                 OutlinedTextField(
                     value = token,
-                    onValueChange = {
-                        token = it
-                    },
-                    label = {
-                        Text("Token")
-                    },
+                    onValueChange = { token = it },
+                    label = { Text("Token") },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
 
-
-                // 新增按钮
                 TextButton(
-                    onClick = {
-                        showTokenHelp = true
-                    }
+                    onClick = { showTokenHelp = true }
                 ) {
                     Text("如何获取Token")
                 }
 
-
-                Spacer(
-                    modifier = Modifier.height(16.dp)
-                )
-
+                Spacer(modifier = Modifier.height(16.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
 
-                    TextButton(
-                        onClick = onNegative
-                    ) {
+                    TextButton(onClick = onNegative) {
                         Text(negativeText)
                     }
 
-
                     Button(
-    onClick = {
+                        onClick = {
+                            checking = true
+                            logs = "开始验证...\n"
 
-        checking = true
+                            coroutineScope.launch {
+                                val result = GithubVerify.verify(
+                                    username.trim(),
+                                    email.trim(),
+                                    token.trim()
+                                ) { msg ->
+                                    logs += "$msg\n"
+                                }
 
-        logs = "开始验证...\n"
+                                if (result) {
+                                    logs += "\n====================\n"
+                                    logs += "✅ 验证成功\n"
+                                    logs += "====================\n"
 
+                                    kotlinx.coroutines.delay(1000)
+                                    checking = false
+                                } else {
+                                    logs += "\n====================\n"
+                                    logs += "❌ 验证失败\n"
+                                    logs += "请检查配置信息是否正确\n"
+                                    logs += "====================\n"
+                                    checking = false
+                                }
 
-        CoroutineScope(
-            Dispatchers.Main
-        ).launch {
+                                resultText = if (result) "检验正确" else "检验失败，请检查配置信息是否正确"
+                                showResult = true
 
-
-            val result =
-    GithubVerify.verify(
-        username.trim(),
-        email.trim(),
-        token.trim()
-    ){
-
-        logs += "$it\n"
-
-    }
-
-
-
-if(result){
-
-    logs += "\n====================\n"
-    logs += "✅ 验证成功\n"
-    logs += "====================\n"
-
-
-    // 等待用户看到成功日志
-    kotlinx.coroutines.delay(1000)
-
-
-    // 自动关闭日志弹窗
-    checking = false
-
-
-
-}else{
-
-
-    logs += "\n====================\n"
-    logs += "❌ 验证失败\n"
-    logs += "请检查配置信息是否正确\n"
-    logs += "====================\n"
-
-
-    //失败不自动关闭
-    //用户点击空白关闭
-
-
-}
-
-
-
-resultText =
-    if(result){
-
-        "检验正确"
-
-    }else{
-
-        "检验失败，请检查配置信息是否正确"
-
-    }
-
-
-            showResult = true
-
-
-            if(result){
-
-                onPositive(
-                    email.trim(),
-                    username.trim(),
-                    token.trim()
-                )
-
-            }
-
-        }
-
-    }
-){
-
-    Text("确定")
-
+                                if (result) {
+                                    onPositive(
+                                        email.trim(),
+                                        username.trim(),
+                                        token.trim()
+                                    )
+                                }
+                            }
+                        }
+                    ) {
+                        Text("确定")
                     }
                 }
             }
@@ -275,58 +173,40 @@ resultText =
     }
 
 
+    // Token获取说明弹窗
+    if (showTokenHelp) {
 
-// Token获取说明弹窗
-if(showTokenHelp){
+        Dialog(
+            onDismissRequest = { showTokenHelp = false }
+        ) {
 
-    Dialog(
-        onDismissRequest = {
-            showTokenHelp=false
-        }
-    ){
-
-        Card(
-    modifier =
-    Modifier
-        .fillMaxWidth()
-        .fillMaxHeight(0.85f)
-        .padding(20.dp),
-
-    shape =
-    RoundedCornerShape(16.dp)
-){
-
-    Column(
-                modifier =
-                Modifier
-                    .padding(24.dp)
-                    
-            ){
-
-
-                Text(
-                    "如何获取 GitHub Token",
-                    style =
-                    MaterialTheme.typography.titleLarge
-                )
-
-
-                Spacer(
-                    Modifier.height(16.dp)
-                )
-
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.85f)
+                    .padding(20.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
 
                 Column(
-    modifier =
-    Modifier
-        .weight(1f)
-        .verticalScroll(
-            rememberScrollState()
-        )
-){
+                    modifier = Modifier.padding(24.dp)
+                ) {
 
-    Text(
-        """
+                    Text(
+                        "如何获取 GitHub Token",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+
+                    Spacer(Modifier.height(16.dp))
+
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+
+                        Text(
+                            """
         📌 GitHub Token 获取步骤
 
 
@@ -374,172 +254,97 @@ if(showTokenHelp){
         Token 生成后只显示一次，
         请及时复制保存。
         """.trimIndent()
-    )
-
-}
-
-                Spacer(
-                    Modifier.height(20.dp)
-                )
-
-
-                Row(
-    modifier = Modifier.fillMaxWidth(),
-    horizontalArrangement = Arrangement.End
-){
-
-    Button(
-        onClick = {
-            showTokenHelp = false
-        }
-    ){
-
-        Text("知道了")
-
-    }
-
-}
-
-            }   // Column结束
-
-        }       // Card结束
-
-    }           // Dialog结束
-
-}               // if(showTokenHelp)结束
-
-
-//验证日志弹窗
-if(checking){
-
-    Dialog(
-        onDismissRequest = {
-
-            if(!logs.contains("验证完成")){
-
-                checking=false
-
-            }
-
-        }
-    ){
-
-        Card{
-
-            Column(
-                modifier =
-                Modifier.padding(20.dp)
-            ){
-
-                Text("正在验证")
-
-
-                Spacer(
-                    Modifier.height(10.dp)
-                )
-
-
-                Text(logs)
-
-Spacer(
-    Modifier.height(20.dp)
-)
-
-
-Row(
-    modifier =
-    Modifier.fillMaxWidth(),
-
-    horizontalArrangement =
-    Arrangement.End
-){
-
-    Button(
-
-        onClick = {
-
-            clipboard.setText(
-                AnnotatedString(logs)
-            )
-
-        }
-
-    ){
-
-        Text("复制日志")
-
-    }
-
-
-    Spacer(
-        Modifier.width(10.dp)
-    )
-
-
-    Button(
-
-        onClick = {
-
-            checking = false
-
-        }
-
-    ){
-
-        Text("返回")
-
-    }
-
-}
-
-            }
-
-        }
-
-    }
-
-}
-
-
-
-//验证结果弹窗
-if(showResult){
-
-    AlertDialog(
-
-        onDismissRequest = {
-            showResult=false
-        },
-
-
-        title = {
-            Text("验证结果")
-        },
-
-
-        text = {
-            Text(resultText)
-        },
-
-
-        confirmButton = {
-
-            TextButton(
-                onClick={
-                    showResult=false
+                        )
+
+                    }
+
+                    Spacer(Modifier.height(20.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+
+                        Button(
+                            onClick = { showTokenHelp = false }
+                        ) {
+                            Text("知道了")
+                        }
+                    }
                 }
-            ){
-
-                Text("知道了")
-
             }
-
         }
-
-    )
-
-}
+    }
 
 
-//关闭 ConfigDialog
+    // 验证日志弹窗
+    if (checking) {
+
+        Dialog(
+            onDismissRequest = {
+                if (!logs.contains("验证完成")) {
+                    checking = false
+                }
+            }
+        ) {
+
+            Card {
+
+                Column(
+                    modifier = Modifier.padding(20.dp)
+                ) {
+
+                    Text("正在验证")
+
+                    Spacer(Modifier.height(10.dp))
+
+                    Text(logs)
+
+                    Spacer(Modifier.height(20.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+
+                        Button(
+                            onClick = {
+                                clipboard.setText(AnnotatedString(logs))
+                            }
+                        ) {
+                            Text("复制日志")
+                        }
+
+                        Spacer(Modifier.width(10.dp))
+
+                        Button(
+                            onClick = { checking = false }
+                        ) {
+                            Text("返回")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+    // 验证结果弹窗
+    if (showResult) {
+
+        AlertDialog(
+
+            onDismissRequest = { showResult = false },
+
+            title = { Text("验证结果") },
+
+            text = { Text(resultText) },
+
+            confirmButton = {
+                TextButton(onClick = { showResult = false }) {
+                    Text("知道了")
+                }
+            }
+        )
+    }
 }
