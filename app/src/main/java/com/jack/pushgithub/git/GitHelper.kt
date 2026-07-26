@@ -118,29 +118,30 @@ object GitHelper {
                     throw e
                 }
 
-                // 检测是否有变更，无变更则跳过 push
+                // 暂存变更，检测是否有变更（浅克隆兼容方式）
                 onProgress("检测文件变更...")
                 git.add().addFilepattern(".").call()
-                val status = git.status().call()
-                val hasChanges = status.added.isNotEmpty() ||
-                        status.changed.isNotEmpty() ||
-                        status.removed.isNotEmpty() ||
-                        status.modified.isNotEmpty() ||
-                        status.missing.isNotEmpty()
 
-                if (!hasChanges) {
+                // 用 commit 检测变更：JGit 在无变更时抛出 EmptyCommitException
+                onProgress("提交更改...")
+                try {
+                    git.commit()
+                        .setAuthor(config.username, config.email)
+                        .setMessage("自动更新于 ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}")
+                        .call()
+                } catch (e: org.eclipse.jgit.api.errors.EmptyCommitException) {
                     onProgress("文件无变化，跳过推送")
                     repoDir.deleteRecursively()
                     return@withContext Result.success("文件无变化，无需推送")
+                } catch (e: Exception) {
+                    if (e.message?.contains("No changes") == true ||
+                        e.message?.contains("no changes") == true) {
+                        onProgress("文件无变化，跳过推送")
+                        repoDir.deleteRecursively()
+                        return@withContext Result.success("文件无变化，无需推送")
+                    }
+                    throw e
                 }
-
-                onProgress("变更文件: 新增 ${status.added.size} / 修改 ${status.changed.size + status.modified.size} / 删除 ${status.removed.size + status.missing.size}")
-
-                onProgress("提交更改...")
-                git.commit()
-                    .setAuthor(config.username, config.email)
-                    .setMessage("自动更新于 ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}")
-                    .call()
 
                 onProgress("正在推送到远程仓库...")
                 var lastPushException: Exception? = null
