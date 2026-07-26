@@ -74,7 +74,13 @@ object GitHelper {
                 }
             }
 
-            cloneGit!!.use { cloneGit ->
+            // 关闭克隆阶段的 Git 对象，释放 HTTP 连接
+            // 避免大文件复制期间连接空闲过久导致后续 push 认证失效
+            onProgress("释放克隆连接...")
+            cloneGit!!.close()
+
+            // 重新打开仓库，push 时将创建全新的 HTTP 连接
+            Git.open(repoDir).use { git ->
                 onProgress("正在复制文件...")
                 try {
                     if (sourceUri != null && sourceUri.scheme == "content") {
@@ -103,17 +109,18 @@ object GitHelper {
                 }
 
                 onProgress("添加所有文件到暂存区...")
-                cloneGit.add().addFilepattern(".").call()
+                git.add().addFilepattern(".").call()
 
                 onProgress("提交更改...")
-                cloneGit.commit()
+                git.commit()
                     .setAuthor(config.username, config.email)
                     .setMessage("自动更新于 ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}")
                     .call()
 
                 onProgress("正在推送到远程仓库...")
-                val pushResult = cloneGit.push()
+                val pushResult = git.push()
                     .setCredentialsProvider(UsernamePasswordCredentialsProvider(config.token, ""))
+                    .setTimeout(300)
                     .setRefSpecs(listOf(org.eclipse.jgit.transport.RefSpec("HEAD:refs/heads/$branch")))
                     .call()
 
