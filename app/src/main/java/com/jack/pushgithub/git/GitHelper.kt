@@ -8,25 +8,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.lib.Repository
-import org.eclipse.jgit.storage.file.WindowCacheConfig
-import org.eclipse.jgit.storage.file.WindowCache
 import org.eclipse.jgit.transport.URIish
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
 import org.eclipse.jgit.transport.RemoteRefUpdate
 import java.io.File
 
 object GitHelper {
-
-    // 全局 JGit 内存配置，避免推送大文件时 OOM
-    private val jgitConfigured = run {
-        val cfg = WindowCacheConfig()
-        cfg.packedGitWindowSize = 512 * 1024        // 512KB 窗口
-        cfg.packedGitLimit = 8 * 1024 * 1024        // 8MB 总缓存
-        cfg.deltaBaseCacheLimit = 2 * 1024 * 1024   // 2MB delta 缓存
-        cfg.streamFileThreshold = 32 * 1024 * 1024   // 32MB 流式阈值
-        WindowCache.reconfigure(cfg)
-        true
-    }
 
     // 常见的应被忽略的文件和目录
     private val DEFAULT_IGNORE_PATTERNS = setOf(
