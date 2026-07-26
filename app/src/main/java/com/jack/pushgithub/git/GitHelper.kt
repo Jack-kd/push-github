@@ -5,6 +5,7 @@ import android.net.Uri
 import com.jack.pushgithub.data.GitConfig
 import com.jack.pushgithub.platform.GitPlatform
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.lib.Repository
@@ -83,7 +84,7 @@ object GitHelper {
             // 重新打开仓库，push 时将创建全新的 HTTP 连接
             Git.open(repoDir).use { git ->
                 // 配置仓库 pack 参数，限制内存占用，避免大文件推送时 OOM
-                configurePackForLowMemory(git.repository)
+                configureRepoForPush(git.repository)
 
                 onProgress("正在复制文件...")
                 try {
@@ -122,24 +123,47 @@ object GitHelper {
                     .call()
 
                 onProgress("正在推送到远程仓库...")
-                val pushResult = git.push()
-                    .setCredentialsProvider(UsernamePasswordCredentialsProvider(config.token, ""))
-                    .setTimeout(300)
-                    .setRefSpecs(listOf(org.eclipse.jgit.transport.RefSpec("HEAD:refs/heads/$branch")))
-                    .call()
-
-                for (pushInfo in pushResult) {
-                    val remoteUpdates = pushInfo.remoteUpdates
-                    for (update in remoteUpdates) {
-                        when (update.status) {
-                            RemoteRefUpdate.Status.OK -> onProgress("推送成功: ${update.remoteName}")
-                            RemoteRefUpdate.Status.UP_TO_DATE -> onProgress("已是最新，无需推送")
-                            RemoteRefUpdate.Status.REJECTED_NONFASTFORWARD ->
-                                throw Exception("推送被拒绝：远程仓库有新的提交，请先同步后再推送")
-                            else -> throw Exception("推送失败: ${update.status} - ${update.message}")
+                var lastPushException: Exception? = null
+                val maxPushRetries = 3
+                for (attempt in 0 until maxPushRetries) {
+                    try {
+                        if (attempt > 0) {
+                            val waitMs = (attempt * 3000).toLong()
+                            onProgress("等待 ${waitMs / 1000}s 后重试推送 (${attempt + 1}/$maxPushRetries)...")
+                            kotlinx.coroutines.delay(waitMs)
                         }
+                        val pushResult = git.push()
+                            .setCredentialsProvider(UsernamePasswordCredentialsProvider(config.token, ""))
+                            .setTimeout(600)
+                            .setRefSpecs(listOf(org.eclipse.jgit.transport.RefSpec("HEAD:refs/heads/$branch")))
+                            .call()
+
+                        for (pushInfo in pushResult) {
+                            val remoteUpdates = pushInfo.remoteUpdates
+                            for (update in remoteUpdates) {
+                                when (update.status) {
+                                    RemoteRefUpdate.Status.OK -> onProgress("推送成功: ${update.remoteName}")
+                                    RemoteRefUpdate.Status.UP_TO_DATE -> onProgress("已是最新，无需推送")
+                                    RemoteRefUpdate.Status.REJECTED_NONFASTFORWARD ->
+                                        throw Exception("推送被拒绝：远程仓库有新的提交，请先同步后再推送")
+                                    else -> throw Exception("推送失败: ${update.status} - ${update.message}")
+                                }
+                            }
+                        }
+                        lastPushException = null
+                        break
+                    } catch (e: Exception) {
+                        lastPushException = e
+                        val is500 = e.message?.contains("500") == true ||
+                                e.message?.contains("Internal Server Error") == true
+                        if (attempt < maxPushRetries - 1 && is500) {
+                            onProgress("推送失败 (HTTP 500)，准备重试...")
+                            continue
+                        }
+                        throw e
                     }
                 }
+                if (lastPushException != null) throw lastPushException
             }
 
             onProgress("清理临时目录...")
@@ -265,19 +289,24 @@ object GitHelper {
     }
 
     /**
-     * 配置仓库 pack 参数，限制内存占用，避免大文件推送时 OOM。
+     * 配置仓库参数，限制内存占用 + 大文件推送可靠性。
      * JGit 默认的 delta 压缩会加载大文件到内存中，在 Android 受限堆上容易 OOM。
      */
-    private fun configurePackForLowMemory(repo: Repository) {
+    private fun configureRepoForPush(repo: Repository) {
         val config = repo.config
-        config.setString("pack", null, "window", "2")              // 最小 delta 搜索窗口
-        config.setString("pack", null, "depth", "10")              // 浅 delta 深度
-        config.setString("pack", null, "windowMemory", "8m")       // 8MB 内存上限
-        config.setString("pack", null, "deltaCacheSize", "2m")     // 2MB delta 缓存
-        config.setString("pack", null, "deltaCacheLimit", "30")    // 最多 30 个 delta 条目
-        config.setString("pack", null, "bigFileThreshold", "3m")   // 超过 3MB 的文件不做 delta 压缩
-        config.setString("pack", null, "threads", "1")             // 单线程，减少并发内存
-        config.setString("pack", null, "indexVersion", "2")        // v2 索引，兼容性更好
+        // pack 参数 — 限制 delta 压缩内存
+        config.setString("pack", null, "window", "2")
+        config.setString("pack", null, "depth", "10")
+        config.setString("pack", null, "windowMemory", "8m")
+        config.setString("pack", null, "deltaCacheSize", "2m")
+        config.setString("pack", null, "deltaCacheLimit", "30")
+        config.setString("pack", null, "bigFileThreshold", "3m")
+        config.setString("pack", null, "threads", "1")
+        config.setString("pack", null, "indexVersion", "2")
+        // HTTP 参数 — 大文件推送 500 错误修复
+        config.setString("http", null, "postBuffer", "524288000")  // 500MB 缓冲区
+        config.setString("http", null, "lowSpeedLimit", "0")       // 不限速
+        config.setString("http", null, "lowSpeedTime", "0")        // 不限速时间
         config.save()
     }
 
