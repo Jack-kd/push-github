@@ -7,12 +7,26 @@ import com.jack.pushgithub.platform.GitPlatform
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.eclipse.jgit.api.Git
+import org.eclipse.jgit.lib.Repository
+import org.eclipse.jgit.storage.file.WindowCacheConfig
+import org.eclipse.jgit.storage.file.WindowCache
 import org.eclipse.jgit.transport.URIish
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
 import org.eclipse.jgit.transport.RemoteRefUpdate
 import java.io.File
 
 object GitHelper {
+
+    // 全局 JGit 内存配置，避免推送大文件时 OOM
+    private val jgitConfigured = run {
+        val cfg = WindowCacheConfig()
+        cfg.packedGitWindowSize = 512 * 1024        // 512KB 窗口
+        cfg.packedGitLimit = 8 * 1024 * 1024        // 8MB 总缓存
+        cfg.deltaBaseCacheLimit = 2 * 1024 * 1024   // 2MB delta 缓存
+        cfg.streamFileThreshold = 32 * 1024 * 1024   // 32MB 流式阈值
+        WindowCache.reconfigure(cfg)
+        true
+    }
 
     // 常见的应被忽略的文件和目录
     private val DEFAULT_IGNORE_PATTERNS = setOf(
@@ -81,6 +95,9 @@ object GitHelper {
 
             // 重新打开仓库，push 时将创建全新的 HTTP 连接
             Git.open(repoDir).use { git ->
+                // 配置仓库 pack 参数，限制内存占用，避免大文件推送时 OOM
+                configurePackForLowMemory(git.repository)
+
                 onProgress("正在复制文件...")
                 try {
                     if (sourceUri != null && sourceUri.scheme == "content") {
@@ -258,6 +275,23 @@ object GitHelper {
             }
         }
         return ignored
+    }
+
+    /**
+     * 配置仓库 pack 参数，限制内存占用，避免大文件推送时 OOM。
+     * JGit 默认的 delta 压缩会加载大文件到内存中，在 Android 受限堆上容易 OOM。
+     */
+    private fun configurePackForLowMemory(repo: Repository) {
+        val config = repo.config
+        config.setString("pack", null, "window", "2")              // 最小 delta 搜索窗口
+        config.setString("pack", null, "depth", "10")              // 浅 delta 深度
+        config.setString("pack", null, "windowMemory", "8m")       // 8MB 内存上限
+        config.setString("pack", null, "deltaCacheSize", "2m")     // 2MB delta 缓存
+        config.setString("pack", null, "deltaCacheLimit", "30")    // 最多 30 个 delta 条目
+        config.setString("pack", null, "bigFileThreshold", "3m")   // 超过 3MB 的文件不做 delta 压缩
+        config.setString("pack", null, "threads", "1")             // 单线程，减少并发内存
+        config.setString("pack", null, "indexVersion", "2")        // v2 索引，兼容性更好
+        config.save()
     }
 
     suspend fun cloneDownload(
