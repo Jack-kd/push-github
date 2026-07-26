@@ -43,21 +43,22 @@ object GitHelper {
             onProgress("目标地址: $cloneUrl")
             onProgress("目标分支: $branch")
 
-            // 总是全新克隆，确保与远程完全同步
+            // 总是全新浅克隆（depth=1），确保与远程同步且速度快
             if (repoDir.exists()) {
                 repoDir.deleteRecursively()
                 onProgress("删除旧的临时目录")
             }
             repoDir.mkdirs()
 
-            // 尝试克隆远程仓库，空仓库会失败（没有分支）
+            // 尝试浅克隆远程仓库，空仓库会失败（没有分支）
             var cloneGit: Git? = null
-            onProgress("正在克隆远程仓库...")
+            onProgress("正在浅克隆远程仓库（depth=1）...")
             try {
                 cloneGit = Git.cloneRepository()
                     .setURI(cloneUrl)
                     .setDirectory(repoDir)
                     .setBranch(branch)
+                    .setDepth(1)
                     .setCredentialsProvider(UsernamePasswordCredentialsProvider(config.token, ""))
                     .call()
                 onProgress("仓库克隆成功")
@@ -66,7 +67,6 @@ object GitHelper {
                     e.message?.contains("Remote branch") == true) {
                     onProgress("远程仓库为空（无分支），初始化本地仓库...")
                     cloneGit = Git.init().setDirectory(repoDir).call()
-                    // 设置远程地址
                     cloneGit!!.remoteAdd()
                         .setName("origin")
                         .setUri(URIish(cloneUrl))
@@ -77,20 +77,26 @@ object GitHelper {
             }
 
             // 关闭克隆阶段的 Git 对象，释放 HTTP 连接
-            // 避免大文件复制期间连接空闲过久导致后续 push 认证失效
             onProgress("释放克隆连接...")
             cloneGit!!.close()
 
             // 重新打开仓库，push 时将创建全新的 HTTP 连接
             Git.open(repoDir).use { git ->
-                // 配置仓库 pack 参数，限制内存占用，避免大文件推送时 OOM
                 configureRepoForPush(git.repository)
 
+                // 清空工作目录（保留 .git），确保删除的文件能被追踪
+                onProgress("清理工作目录...")
+                val workTree = git.repository.workTree
+                workTree.listFiles()?.forEach { file ->
+                    if (file.name != ".git") file.deleteRecursively()
+                }
+
+                // 复制源文件到仓库目录
                 onProgress("正在复制文件...")
                 try {
                     if (sourceUri != null && sourceUri.scheme == "content") {
                         onProgress("通过 SAF URI 复制文件")
-                        DocumentFileCopy.copyFromUri(context, sourceUri, repoDir)
+                        DocumentFileCopy.copyFromUri(context, sourceUri, workTree)
                         onFileProgress(1, 1)
                     } else {
                         val srcFolder = File(sourcePath)
@@ -99,10 +105,9 @@ object GitHelper {
                         }
                         onProgress("从本地路径复制文件: $sourcePath")
 
-                        // 加载 .gitignore 规则
                         val ignoreRules = loadIgnoreRules(srcFolder)
                         val totalFiles = countFiles(srcFolder, ignoreRules)
-                        val copied = copyDirectory(srcFolder, repoDir, ignoreRules) { current ->
+                        val copied = copyDirectory(srcFolder, workTree, ignoreRules) { current ->
                             onFileProgress(current, totalFiles)
                         }
                         onProgress("已复制 $copied 个文件")
@@ -113,8 +118,23 @@ object GitHelper {
                     throw e
                 }
 
-                onProgress("添加所有文件到暂存区...")
+                // 检测是否有变更，无变更则跳过 push
+                onProgress("检测文件变更...")
                 git.add().addFilepattern(".").call()
+                val status = git.status().call()
+                val hasChanges = status.added.isNotEmpty() ||
+                        status.changed.isNotEmpty() ||
+                        status.removed.isNotEmpty() ||
+                        status.modified.isNotEmpty() ||
+                        status.missing.isNotEmpty()
+
+                if (!hasChanges) {
+                    onProgress("文件无变化，跳过推送")
+                    repoDir.deleteRecursively()
+                    return@withContext Result.success("文件无变化，无需推送")
+                }
+
+                onProgress("变更文件: 新增 ${status.added.size} / 修改 ${status.changed.size + status.modified.size} / 删除 ${status.removed.size + status.missing.size}")
 
                 onProgress("提交更改...")
                 git.commit()
