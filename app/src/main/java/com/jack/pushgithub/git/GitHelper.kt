@@ -31,6 +31,7 @@ object GitHelper {
         sourcePath: String,
         sourceUri: Uri?,
         branch: String = "main",
+        repoPath: String = "",
         onProgress: (String) -> Unit,
         onFileProgress: (current: Int, total: Int) -> Unit
     ): Result<String> = withContext(Dispatchers.IO) {
@@ -84,19 +85,30 @@ object GitHelper {
             Git.open(repoDir).use { git ->
                 configureRepoForPush(git.repository)
 
-                // 清空工作目录（保留 .git），确保删除的文件能被追踪
-                onProgress("清理工作目录...")
+                // 解析目标子目录（仓库路径），空串表示仓库根目录
                 val workTree = git.repository.workTree
-                workTree.listFiles()?.forEach { file ->
-                    if (file.name != ".git") file.deleteRecursively()
-                }
+                val cleanRepoPath = repoPath.trim().trim('/')
+                val targetDir = if (cleanRepoPath.isEmpty()) workTree else File(workTree, cleanRepoPath)
+                onProgress(if (cleanRepoPath.isEmpty()) "目标路径: 仓库根目录" else "目标路径: $cleanRepoPath/")
 
-                // 复制源文件到仓库目录
+                // 清空目标目录（保留 .git），确保删除的文件能被追踪；
+                // 根目录模式下清空整个工作区，子目录模式只清空目标子目录（不影响仓库其他内容）
+                onProgress("清理目标目录...")
+                if (cleanRepoPath.isEmpty()) {
+                    workTree.listFiles()?.forEach { file ->
+                        if (file.name != ".git") file.deleteRecursively()
+                    }
+                } else {
+                    if (targetDir.exists()) targetDir.deleteRecursively()
+                }
+                targetDir.mkdirs()
+
+                // 复制源文件到目标目录
                 onProgress("正在复制文件...")
                 try {
                     if (sourceUri != null && sourceUri.scheme == "content") {
                         onProgress("通过 SAF URI 复制文件")
-                        DocumentFileCopy.copyFromUri(context, sourceUri, workTree)
+                        DocumentFileCopy.copyFromUri(context, sourceUri, targetDir)
                         onFileProgress(1, 1)
                     } else {
                         val srcFolder = File(sourcePath)
@@ -107,7 +119,7 @@ object GitHelper {
 
                         val ignoreRules = loadIgnoreRules(srcFolder)
                         val totalFiles = countFiles(srcFolder, ignoreRules)
-                        val copied = copyDirectory(srcFolder, workTree, ignoreRules) { current ->
+                        val copied = copyDirectory(srcFolder, targetDir, ignoreRules) { current ->
                             onFileProgress(current, totalFiles)
                         }
                         onProgress("已复制 $copied 个文件")

@@ -44,6 +44,7 @@ data class MainUiState(
     val showConfigDialog: Boolean = false,
     val isFirstTime: Boolean = true,
     val repoUrl: String = "",
+    val repoPath: String = "",
     val branch: String = "main",
     val sourceDirDisplayName: String = "",
     val sourceDirUri: Uri? = null,
@@ -356,6 +357,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(repoUrl = url) }
     }
 
+    fun updateRepoPath(path: String) {
+        _uiState.update { it.copy(repoPath = path) }
+    }
+
     fun updateBranch(branch: String) {
         _uiState.update { it.copy(branch = branch) }
     }
@@ -638,6 +643,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             androidx.work.Data.Builder()
                 .putString(ScheduledPushWorker.KEY_REPO_URL, repoUrl)
                 .putString(ScheduledPushWorker.KEY_SOURCE_PATH, sourcePath)
+                .putString(ScheduledPushWorker.KEY_REPO_PATH, state.repoPath)
                 .putString(ScheduledPushWorker.KEY_BRANCH, branch)
                 .putString(ScheduledPushWorker.KEY_PLATFORM, platform.name)
                 .build()
@@ -684,6 +690,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         clearLog()
         addLog("开始推送流程...")
         addLog("目标仓库: ${state.repoUrl}")
+        addLog("目标路径: ${if (state.repoPath.isBlank()) "仓库根目录" else state.repoPath}")
         addLog("目标分支: ${state.branch}")
         addLog("本地路径: ${state.sourceDirDisplayName}")
         addLog("Token: 已配置")
@@ -711,6 +718,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     sourcePath = state.sourceDirDisplayName,
                     sourceUri = state.sourceDirUri,
                     branch = state.branch,
+                    repoPath = state.repoPath,
                     onProgress = { msg ->
                         addLog(msg)
                         _uiState.update { it.copy(statusMessage = msg) }
