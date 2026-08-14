@@ -19,6 +19,7 @@ class ScheduledPushWorker(
     companion object {
         const val KEY_REPO_URL = "repo_url"
         const val KEY_SOURCE_PATH = "source_path"
+        const val KEY_REPO_PATH = "repo_path"
         const val KEY_BRANCH = "branch"
         const val KEY_PLATFORM = "platform"
     }
@@ -26,6 +27,7 @@ class ScheduledPushWorker(
     override suspend fun doWork(): Result {
         val repoUrl = inputData.getString(KEY_REPO_URL) ?: return Result.failure()
         val sourcePath = inputData.getString(KEY_SOURCE_PATH) ?: return Result.failure()
+        val repoPath = inputData.getString(KEY_REPO_PATH) ?: ""
         val branch = inputData.getString(KEY_BRANCH) ?: "main"
         val platformName = inputData.getString(KEY_PLATFORM) ?: "GitHub"
 
@@ -46,6 +48,7 @@ class ScheduledPushWorker(
             sourcePath = sourcePath,
             sourceUri = null,
             branch = branch,
+            repoPath = repoPath,
             onProgress = {},
             onFileProgress = { _, _ -> }
         )

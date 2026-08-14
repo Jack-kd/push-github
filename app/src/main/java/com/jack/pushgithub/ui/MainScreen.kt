@@ -376,6 +376,19 @@ fun MainScreen(
                         leadingIcon = { Icon(Icons.Default.Link, null) }
                     )
                     Spacer(Modifier.height(8.dp))
+                    // 仓库路径（目标子目录，留空=仓库根目录）
+                    OutlinedTextField(
+                        value = state.repoPath,
+                        onValueChange = { viewModel.updateRepoPath(it) },
+                        label = { Text("仓库路径") },
+                        placeholder = { Text("如：web") },
+                        supportingText = { Text("推送到仓库的该子目录下，留空表示仓库根目录") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        leadingIcon = { Icon(Icons.Default.Folder, null) }
+                    )
+                    Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = state.branch,
                         onValueChange = { viewModel.updateBranch(it) },
