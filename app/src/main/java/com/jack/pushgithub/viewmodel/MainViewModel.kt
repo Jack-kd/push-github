@@ -21,6 +21,7 @@ import com.jack.pushgithub.github.CommitInfo
 import com.jack.pushgithub.github.FileInfo
 import com.jack.pushgithub.github.GithubApi
 import com.jack.pushgithub.git.GitHelper
+import com.jack.pushgithub.git.PushSource
 import com.jack.pushgithub.network.NetworkUtils
 import com.jack.pushgithub.notification.PushNotificationHelper
 import com.jack.pushgithub.platform.GitPlatform
@@ -88,7 +89,16 @@ data class MainUiState(
     val selectedFilePaths: Set<String> = emptySet(),
 
     // Source dir dialog
-    val showSourceDirDialog: Boolean = false
+    val showSourceDirDialog: Boolean = false,
+
+    // Push via PR (仅 GitHub)
+    val pushViaPR: Boolean = false,
+
+    // Single file push
+    val showSingleFileDialog: Boolean = false,
+    val singleFileName: String = "",
+    val singleFileUri: Uri? = null,
+    val singleFileDestDir: String = ""
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -426,8 +436,80 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             showStoragePermissionDialog()
             return
         }
+        val usePR = _uiState.value.pushViaPR
         hideSourceDirDialog()
-        startPush()
+        startPush(usePR)
+    }
+
+    // ========== 通过 PR 推送 与 单个文件推送 ==========
+
+    fun setPushViaPR(v: Boolean) {
+        _uiState.update { it.copy(pushViaPR = v) }
+    }
+
+    fun openSingleFileDialog() {
+        _uiState.update { it.copy(showSingleFileDialog = true) }
+    }
+
+    fun hideSingleFileDialog() {
+        _uiState.update { it.copy(showSingleFileDialog = false) }
+    }
+
+    fun setSingleFile(uri: Uri) {
+        val name = try {
+            getApplication<Application>().contentResolver.query(
+                uri, null, null, null, null
+            )?.use { cursor ->
+                val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (idx >= 0 && cursor.moveToFirst()) cursor.getString(idx) ?: ""
+                else ""
+            } ?: ""
+        } catch (_: Exception) {
+            ""
+        }
+        _uiState.update {
+            it.copy(
+                singleFileUri = uri,
+                singleFileName = name.ifBlank { uri.lastPathSegment?.substringAfterLast('/') ?: "文件" }
+            )
+        }
+    }
+
+    fun updateSingleFileDestDir(v: String) {
+        _uiState.update { it.copy(singleFileDestDir = v) }
+    }
+
+    fun pushSingleFile() {
+        val state = _uiState.value
+        if (state.repoUrl.isBlank()) {
+            addLog("错误：目标仓库地址为空")
+            _uiState.update { it.copy(errorMessage = "请输入目标仓库地址") }
+            return
+        }
+        if (state.singleFileUri == null) {
+            addLog("错误：请先选择要推送的文件")
+            return
+        }
+        checkStoragePermission()
+        if (!state.hasStoragePermission && state.singleFileUri == null) {
+            addLog("错误：缺少存储权限，无法访问文件")
+            _uiState.update { it.copy(errorMessage = "需要存储权限才能访问文件") }
+            return
+        }
+        if (!NetworkUtils.isNetworkAvailable(getApplication())) {
+            addLog("错误：网络不可用，请检查网络连接")
+            _uiState.update { it.copy(errorMessage = "网络不可用，请检查网络连接") }
+            return
+        }
+
+        val source = PushSource.SingleFile(
+            filePath = if (state.hasStoragePermission) state.singleFileName else "",
+            uri = state.singleFileUri,
+            fileName = state.singleFileName,
+            destSubDir = state.singleFileDestDir
+        )
+        hideSingleFileDialog()
+        executePush(source, usePR = state.pushViaPR, sourceDisplay = state.singleFileName)
     }
 
     // ========== Multi-repo config ==========
@@ -655,7 +737,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // ========== Main push method ==========
 
-    fun startPush() {
+    fun startPush(usePR: Boolean = false) {
         val state = _uiState.value
         if (state.repoUrl.isBlank()) {
             addLog("错误：目标仓库地址为空")
@@ -681,13 +763,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
+        val source = PushSource.Folder(state.sourceDirDisplayName, state.sourceDirUri)
+        executePush(source, usePR = usePR, sourceDisplay = state.sourceDirDisplayName)
+    }
+
+    /**
+     * 真正执行推送的公共逻辑，支持文件夹/单文件两种来源，以及走 PR 或直接推送。
+     */
+    private fun executePush(source: PushSource, usePR: Boolean, sourceDisplay: String) {
+        val state = _uiState.value
+
         clearLog()
         addLog("开始推送流程...")
         addLog("目标仓库: ${state.repoUrl}")
         addLog("目标分支: ${state.branch}")
-        addLog("本地路径: ${state.sourceDirDisplayName}")
+        addLog("本地路径: $sourceDisplay")
         addLog("Token: 已配置")
         addLog("用户名: 已配置")
+        addLog(if (usePR) "推送方式: 新建分支 + PR" else "推送方式: 直接推送")
 
         // Platform detection
         val platform = GitPlatform.detect(state.repoUrl)
@@ -704,13 +797,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             var resultMessage = ""
 
             try {
-                val result = GitHelper.pushSourceToRepo(
+                val result = GitHelper.pushToRemote(
                     context = getApplication(),
                     config = state.config,
                     repoUrl = state.repoUrl,
-                    sourcePath = state.sourceDirDisplayName,
-                    sourceUri = state.sourceDirUri,
-                    branch = state.branch,
+                    source = source,
+                    targetBranch = state.branch,
+                    usePR = usePR,
                     onProgress = { msg ->
                         addLog(msg)
                         _uiState.update { it.copy(statusMessage = msg) }
@@ -724,17 +817,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 )
 
-                result.onSuccess { msg ->
+                val outcome = result.getOrNull()
+                if (outcome != null) {
                     success = true
-                    resultMessage = msg
-                    addLog("✅ $msg")
-                    _uiState.update { it.copy(isWorking = false, statusMessage = msg, errorMessage = "") }
+                    resultMessage = outcome.message
+                    if (usePR && outcome.pushedBranch != null) {
+                        addLog("正在创建 PR...")
+                        val prUrl = createPullRequestForBranch(outcome.pushedBranch, sourceDisplay)
+                        resultMessage = if (!prUrl.isNullOrBlank()) "已创建 PR: $prUrl" else "分支已推送，但创建 PR 失败"
+                        addLog("✅ $resultMessage")
+                    } else {
+                        addLog("✅ $resultMessage")
+                    }
+                    _uiState.update { it.copy(isWorking = false, statusMessage = resultMessage, errorMessage = "") }
                     kotlinx.coroutines.delay(800)
                     _uiState.value = _uiState.value.copy(
                         progressVisible = false,
                         progress = 0
                     )
-                }.onFailure { e ->
+                } else {
+                    val e = result.exceptionOrNull() ?: Exception("未知错误")
                     success = false
                     resultMessage = e.message ?: "未知错误"
                     addLog("❌ 推送失败: ${e.message}")
@@ -757,7 +859,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     insertPushHistory(
                         repoUrl = state.repoUrl,
                         branch = state.branch,
-                        sourcePath = state.sourceDirDisplayName,
+                        sourcePath = sourceDisplay,
                         success = success,
                         message = resultMessage
                     )
@@ -770,6 +872,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     resultMessage,
                     success
                 )
+            }
+        }
+    }
+
+    /**
+     * 为已经推送到远程的功能分支创建 PR，返回 PR 网页地址。
+     */
+    private suspend fun createPullRequestForBranch(headBranch: String, sourceDisplay: String): String? {
+        val state = _uiState.value
+        val pair = parseRepoUrl() ?: run {
+            addLog("无法解析仓库地址，跳过创建 PR")
+            return null
+        }
+        val token = loadToken() ?: return null
+        val title = "自动推送「$sourceDisplay」 " +
+                java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
+        val body = "由 PushGithub 应用自动创建，请审核后合入。"
+        return withContext(Dispatchers.IO) {
+            try {
+                GithubApi(token).createPullRequest(
+                    owner = pair.first,
+                    repo = pair.second,
+                    head = headBranch,
+                    base = state.branch,
+                    title = title,
+                    body = body
+                )
+            } catch (e: Exception) {
+                addLog("创建 PR 失败: ${e.message}")
+                null
             }
         }
     }

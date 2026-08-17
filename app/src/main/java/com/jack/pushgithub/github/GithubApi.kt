@@ -342,6 +342,39 @@ class GithubApi(
         onProgress("删除完成✅")
         onProgressPercent(100)
     }
+
+    /**
+     * 创建 Pull Request，返回 PR 网页地址
+     */
+    suspend fun createPullRequest(
+        owner: String,
+        repo: String,
+        head: String,
+        base: String,
+        title: String,
+        body: String = ""
+    ): String = withContext(Dispatchers.IO) {
+        val json = JSONObject().apply {
+            put("title", title)
+            put("head", head)
+            put("base", base)
+            put("body", body)
+        }
+        val request = Request.Builder()
+            .url("https://api.github.com/repos/$owner/$repo/pulls")
+            .headers(headers)
+            .post(json.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+
+        val response = client.newCall(request).execute()
+        if (!response.isSuccessful) {
+            val err = response.body?.string()
+            throw Exception("创建 PR 失败 HTTP:${response.code}\n$err")
+        }
+        val resBody = response.body?.string()
+            ?: throw Exception("GitHub API 返回空响应体")
+        JSONObject(resBody).optString("html_url", "")
+    }
 }
 
 

@@ -14,6 +14,37 @@ import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
 import org.eclipse.jgit.transport.RemoteRefUpdate
 import java.io.File
 
+/**
+ * 推送内容来源：整个文件夹 或 单个文件
+ */
+sealed interface PushSource {
+    /** 推送整个文件夹（path 为本地绝对路径；uri 为 SAF 目录，二者选一） */
+    data class Folder(val path: String, val uri: Uri?) : PushSource
+
+    /**
+     * 推送单个文件
+     * @param filePath 本地绝对路径（可访问存储时提供），可为空
+     * @param uri SAF 内容 Uri（文件选择器返回），可为空
+     * @param fileName 远程仓库中的文件名
+     * @param destSubDir 目标子目录，空字符串表示仓库根目录
+     */
+    data class SingleFile(
+        val filePath: String,
+        val uri: Uri?,
+        val fileName: String,
+        val destSubDir: String
+    ) : PushSource
+}
+
+/** 推送结果 */
+data class PushResult(
+    val message: String,
+    /** 使用 PR 推送时，实际推送的分支名 */
+    val pushedBranch: String? = null,
+    /** PR 的网页地址，成功创建后由调用方填充 */
+    val prUrl: String? = null
+)
+
 object GitHelper {
 
     // 常见的应被忽略的文件和目录
@@ -24,6 +55,10 @@ object GitHelper {
         "__pycache__", "*.pyc", ".env", "local.properties"
     )
 
+    /**
+     * 兼容旧调用：推送整个文件夹，且始终直接推送到目标分支。
+     * 由定时任务等场景使用。
+     */
     suspend fun pushSourceToRepo(
         context: Context,
         config: GitConfig,
@@ -33,15 +68,44 @@ object GitHelper {
         branch: String = "main",
         onProgress: (String) -> Unit,
         onFileProgress: (current: Int, total: Int) -> Unit
-    ): Result<String> = withContext(Dispatchers.IO) {
+    ): Result<String> {
+        val result = pushToRemote(
+            context = context,
+            config = config,
+            repoUrl = repoUrl,
+            source = PushSource.Folder(sourcePath, sourceUri),
+            targetBranch = branch,
+            usePR = false,
+            onProgress = onProgress,
+            onFileProgress = onFileProgress
+        )
+        return result.map { it.message }
+    }
+
+    /**
+     * 统一的推送入口，支持：
+     * - 推送整个文件夹 或 单个文件
+     * - 直接推送到目标分支 或 新建分支后推送（usePR，仅 GitHub）
+     */
+    suspend fun pushToRemote(
+        context: Context,
+        config: GitConfig,
+        repoUrl: String,
+        source: PushSource,
+        targetBranch: String = "main",
+        usePR: Boolean = false,
+        onProgress: (String) -> Unit,
+        onFileProgress: (current: Int, total: Int) -> Unit
+    ): Result<PushResult> = withContext(Dispatchers.IO) {
         try {
             val repoDir = File(context.filesDir, "temp_git_upload")
+            val isGitHub = repoUrl.contains("github.com")
 
             // 使用 GitPlatform 构建克隆 URL
             val platform = GitPlatform.detect(repoUrl)
             val cloneUrl = GitPlatform.buildCloneUrl(platform, repoUrl)
             onProgress("目标地址: $cloneUrl")
-            onProgress("目标分支: $branch")
+            onProgress("目标分支: $targetBranch")
 
             // 总是全新浅克隆（depth=1），确保与远程同步且速度快
             if (repoDir.exists()) {
@@ -52,12 +116,13 @@ object GitHelper {
 
             // 尝试浅克隆远程仓库，空仓库会失败（没有分支）
             var cloneGit: Git? = null
+            var isEmptyRepo = false
             onProgress("正在浅克隆远程仓库（depth=1）...")
             try {
                 cloneGit = Git.cloneRepository()
                     .setURI(cloneUrl)
                     .setDirectory(repoDir)
-                    .setBranch(branch)
+                    .setBranch(targetBranch)
                     .setDepth(1)
                     .setCredentialsProvider(UsernamePasswordCredentialsProvider(config.token, ""))
                     .call()
@@ -66,6 +131,7 @@ object GitHelper {
                 if (e.message?.contains("not found in upstream") == true ||
                     e.message?.contains("Remote branch") == true) {
                     onProgress("远程仓库为空（无分支），初始化本地仓库...")
+                    isEmptyRepo = true
                     cloneGit = Git.init().setDirectory(repoDir).call()
                     cloneGit!!.remoteAdd()
                         .setName("origin")
@@ -81,8 +147,24 @@ object GitHelper {
             cloneGit!!.close()
 
             // 重新打开仓库，push 时将创建全新的 HTTP 连接
+            var featureBranch: String? = null
             Git.open(repoDir).use { git ->
                 configureRepoForPush(git.repository)
+
+                // 计算推送目标引用：PR 模式新建一个功能分支，否则直接推目标分支
+                var pushTargetRef = targetBranch
+                featureBranch = if (usePR && isGitHub && !isEmptyRepo) {
+                    val name = "push-${java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.getDefault()).format(java.util.Date())}"
+                    onProgress("创建功能分支: $name")
+                    git.checkout()
+                        .setName(name)
+                        .setCreateBranch(true)
+                        .call()
+                    name
+                } else {
+                    null
+                }
+                if (featureBranch != null) pushTargetRef = featureBranch
 
                 // 清空工作目录（保留 .git），确保删除的文件能被追踪
                 onProgress("清理工作目录...")
@@ -91,27 +173,16 @@ object GitHelper {
                     if (file.name != ".git") file.deleteRecursively()
                 }
 
-                // 复制源文件到仓库目录
+                // 复制源文件到仓库目录（文件夹或单个文件）
                 onProgress("正在复制文件...")
                 try {
-                    if (sourceUri != null && sourceUri.scheme == "content") {
-                        onProgress("通过 SAF URI 复制文件")
-                        DocumentFileCopy.copyFromUri(context, sourceUri, workTree)
-                        onFileProgress(1, 1)
-                    } else {
-                        val srcFolder = File(sourcePath)
-                        if (!srcFolder.exists() || !srcFolder.isDirectory) {
-                            throw Exception("本地文件夹不存在或无法访问: $sourcePath")
-                        }
-                        onProgress("从本地路径复制文件: $sourcePath")
-
-                        val ignoreRules = loadIgnoreRules(srcFolder)
-                        val totalFiles = countFiles(srcFolder, ignoreRules)
-                        val copied = copyDirectory(srcFolder, workTree, ignoreRules) { current ->
-                            onFileProgress(current, totalFiles)
-                        }
-                        onProgress("已复制 $copied 个文件")
-                    }
+                    copySourceIntoWorktree(
+                        context = context,
+                        source = source,
+                        workTree = workTree,
+                        onProgress = onProgress,
+                        onFileProgress = onFileProgress
+                    )
                     onProgress("文件复制完成")
                 } catch (e: Exception) {
                     onProgress("文件复制失败: ${e.message}")
@@ -131,7 +202,9 @@ object GitHelper {
                 if (!hasChanges) {
                     onProgress("文件无变化，跳过推送")
                     repoDir.deleteRecursively()
-                    return@withContext Result.success("文件无变化，无需推送")
+                    return@withContext Result.success(
+                        PushResult(message = "文件无变化，无需推送", pushedBranch = featureBranch)
+                    )
                 }
 
                 onProgress("变更文件: 新增 ${status.added.size} / 修改 ${status.changed.size + status.modified.size} / 删除 ${status.removed.size + status.missing.size}")
@@ -155,7 +228,7 @@ object GitHelper {
                         val pushResult = git.push()
                             .setCredentialsProvider(UsernamePasswordCredentialsProvider(config.token, ""))
                             .setTimeout(600)
-                            .setRefSpecs(listOf(org.eclipse.jgit.transport.RefSpec("HEAD:refs/heads/$branch")))
+                            .setRefSpecs(listOf(org.eclipse.jgit.transport.RefSpec("HEAD:refs/heads/$pushTargetRef")))
                             .call()
 
                         for (pushInfo in pushResult) {
@@ -188,11 +261,93 @@ object GitHelper {
 
             onProgress("清理临时目录...")
             repoDir.deleteRecursively()
-            Result.success("推送成功！")
+            if (featureBranch != null) {
+                Result.success(
+                    PushResult(
+                        message = "分支推送成功，等待创建 PR",
+                        pushedBranch = featureBranch
+                    )
+                )
+            } else {
+                Result.success(PushResult(message = "推送成功！"))
+            }
         } catch (e: Exception) {
             e.printStackTrace()
             Result.failure(e)
         }
+    }
+
+    /**
+     * 根据推送来源，把文件夹或单个文件复制到仓库工作目录。
+     */
+    private fun copySourceIntoWorktree(
+        context: Context,
+        source: PushSource,
+        workTree: File,
+        onProgress: (String) -> Unit,
+        onFileProgress: (current: Int, total: Int) -> Unit
+    ) {
+        when (source) {
+            is PushSource.Folder -> {
+                if (source.uri?.scheme == "content") {
+                    onProgress("通过 SAF URI 复制文件夹")
+                    DocumentFileCopy.copyFromUri(context, source.uri, workTree)
+                    onFileProgress(1, 1)
+                } else {
+                    val srcFolder = File(source.path)
+                    if (!srcFolder.exists() || !srcFolder.isDirectory) {
+                        throw Exception("本地文件夹不存在或无法访问: ${source.path}")
+                    }
+                    onProgress("从本地路径复制文件夹: ${source.path}")
+                    val ignoreRules = loadIgnoreRules(srcFolder)
+                    val totalFiles = countFiles(srcFolder, ignoreRules)
+                    val copied = copyDirectory(srcFolder, workTree, ignoreRules) { current ->
+                        onFileProgress(current, totalFiles)
+                    }
+                    onProgress("已复制 $copied 个文件")
+                }
+            }
+            is PushSource.SingleFile -> {
+                val destDir = if (source.destSubDir.isBlank()) {
+                    workTree
+                } else {
+                    File(workTree, sanitizeSubDir(source.destSubDir))
+                }
+                destDir.mkdirs()
+                val fileName = normalizeFileName(source.fileName)
+                val destFile = File(destDir, fileName)
+                if (source.uri?.scheme == "content") {
+                    onProgress("通过 SAF URI 复制单个文件: $fileName")
+                    val input = context.contentResolver.openInputStream(source.uri)
+                        ?: throw Exception("无法读取文件: $fileName")
+                    input.use { ins ->
+                        destFile.outputStream().use { ins.copyTo(it) }
+                    }
+                } else {
+                    onProgress("复制单个文件: $fileName")
+                    val srcFile = File(source.filePath)
+                    if (!srcFile.exists() || !srcFile.isFile) {
+                        throw Exception("本地文件不存在或无法访问: ${source.filePath}")
+                    }
+                    srcFile.copyTo(destFile, overwrite = true)
+                }
+                onFileProgress(1, 1)
+            }
+        }
+    }
+
+    /** 去除目标子目录中的危险片段，避免目录穿越 */
+    private fun sanitizeSubDir(subDir: String): String {
+        return subDir.replace('\\', '/')
+            .split('/')
+            .filter { it.isNotBlank() && it != "." && it != ".." }
+            .joinToString("/")
+    }
+
+    /** 过滤文件名中的路径分隔符，防止覆盖目标路径 */
+    private fun normalizeFileName(name: String): String {
+        val n = name.replace('\\', '/').substringAfterLast('/')
+        return n.ifBlank { "file" }
     }
 
     /**

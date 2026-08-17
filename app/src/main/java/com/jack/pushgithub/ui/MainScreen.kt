@@ -76,6 +76,13 @@ fun MainScreen(
         }
     }
 
+    // 单个文件选择器
+    val singleFilePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let { viewModel.setSingleFile(it) }
+    }
+
     // ============================================================
     // 对话框
     // ============================================================
@@ -205,10 +212,25 @@ fun MainScreen(
     if (state.showSourceDirDialog) {
         SourceDirDialog(
             sourcePath = state.sourceDirDisplayName,
+            usePR = state.pushViaPR,
+            onPRChange = { viewModel.setPushViaPR(it) },
             onPathChange = { viewModel.updateSourceDirManually(it) },
             onBrowse = { folderPicker.launch(null) },
             onConfirm = { viewModel.confirmPush() },
             onDismiss = { viewModel.hideSourceDirDialog() }
+        )
+    }
+
+    if (state.showSingleFileDialog) {
+        SingleFileDialog(
+            fileName = state.singleFileName,
+            destDir = state.singleFileDestDir,
+            usePR = state.pushViaPR,
+            onDestDirChange = { viewModel.updateSingleFileDestDir(it) },
+            onPRChange = { viewModel.setPushViaPR(it) },
+            onBrowse = { singleFilePicker.launch(arrayOf("*/*")) },
+            onConfirm = { viewModel.pushSingleFile() },
+            onDismiss = { viewModel.hideSingleFileDialog() }
         )
     }
 
@@ -438,6 +460,17 @@ fun MainScreen(
                     }
                     Spacer(Modifier.width(2.dp))
                     Text("上传源码", fontSize = 12.sp, maxLines = 1)
+                }
+
+                OutlinedButton(
+                    onClick = { viewModel.openSingleFileDialog() },
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    enabled = !state.isWorking
+                ) {
+                    Icon(Icons.Default.Description, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(2.dp))
+                    Text("推送单文件", fontSize = 12.sp, maxLines = 1)
                 }
             }
 
@@ -964,6 +997,8 @@ private fun DownloadDialog(
 @Composable
 private fun SourceDirDialog(
     sourcePath: String,
+    usePR: Boolean,
+    onPRChange: (Boolean) -> Unit,
     onPathChange: (String) -> Unit,
     onBrowse: () -> Unit,
     onConfirm: () -> Unit,
@@ -1007,7 +1042,25 @@ private fun SourceDirDialog(
                         Icon(Icons.Default.FolderOpen, "浏览")
                     }
                 }
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(12.dp))
+
+                // 通过 PR 推送（仅 GitHub）
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.PullRequest, null, tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("通过 PR 推送（仅 GitHub）", fontSize = 13.sp)
+                    Spacer(Modifier.weight(1f))
+                    Switch(checked = usePR, onCheckedChange = onPRChange)
+                }
+                Spacer(Modifier.height(12.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1023,6 +1076,119 @@ private fun SourceDirDialog(
                         Icon(Icons.Default.CloudUpload, null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
                         Text("确定")
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ============================================================
+// 单个文件推送对话框
+// ============================================================
+
+@Composable
+private fun SingleFileDialog(
+    fileName: String,
+    destDir: String,
+    usePR: Boolean,
+    onDestDirChange: (String) -> Unit,
+    onPRChange: (Boolean) -> Unit,
+    onBrowse: () -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(shape = RoundedCornerShape(20.dp)) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Icon(
+                    Icons.Default.Description, null,
+                    modifier = Modifier.size(40.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.height(12.dp))
+                Text("推送单个文件", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                Spacer(Modifier.height(4.dp))
+                Text("选择要推送的单个文件，可指定放到仓库的子目录",
+                    fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(16.dp))
+
+                // 已选文件
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            fileName.ifBlank { "未选择文件" },
+                            fontSize = 13.sp,
+                            fontWeight = if (fileName.isBlank()) FontWeight.Normal else FontWeight.Medium,
+                            color = if (fileName.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        FilledTonalButton(
+                            onClick = onBrowse,
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.FolderOpen, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("浏览")
+                        }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = destDir,
+                    onValueChange = onDestDirChange,
+                    label = { Text("目标子目录（留空为仓库根目录）") },
+                    placeholder = { Text("如 source/lib/") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    leadingIcon = { Icon(Icons.Default.Folder, null) }
+                )
+                Spacer(Modifier.height(12.dp))
+
+                // 通过 PR 推送（仅 GitHub）
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.PullRequest, null, tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("通过 PR 推送（仅 GitHub）", fontSize = 13.sp)
+                    Spacer(Modifier.weight(1f))
+                    Switch(checked = usePR, onCheckedChange = onPRChange)
+                }
+                Spacer(Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) { Text("取消") }
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = onConfirm,
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = fileName.isNotBlank()
+                    ) {
+                        Icon(Icons.Default.CloudUpload, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("推送")
                     }
                 }
             }
