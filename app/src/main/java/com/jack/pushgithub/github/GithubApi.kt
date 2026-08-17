@@ -265,6 +265,47 @@ class GithubApi(
     }
 
     /**
+     * 创建 Pull Request（head -> base）
+     */
+    suspend fun createPullRequest(
+        owner: String,
+        repo: String,
+        title: String,
+        head: String,
+        base: String,
+        body: String = ""
+    ): PullRequestInfo = withContext(Dispatchers.IO) {
+        val payload = JSONObject().apply {
+            put("title", title)
+            put("head", head)
+            put("base", base)
+            if (body.isNotBlank()) put("body", body)
+        }
+
+        val request = Request.Builder()
+            .url("https://api.github.com/repos/$owner/$repo/pulls")
+            .headers(headers)
+            .post(payload.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+
+        val response = client.newCall(request).execute()
+        if (!response.isSuccessful) {
+            val errorBody = response.body?.string()
+            throw Exception(
+                "创建 PR 失败 HTTP:${response.code}\n${errorBody ?: ""}"
+            )
+        }
+
+        val json = JSONObject(response.body?.string()
+            ?: throw Exception("GitHub API 返回空响应体"))
+        PullRequestInfo(
+            number = json.optInt("number", 0),
+            state = json.optString("state", ""),
+            htmlUrl = json.optString("html_url", "")
+        )
+    }
+
+    /**
      * 获取仓库文件列表
      */
     suspend fun getRepositoryFiles(
@@ -356,4 +397,10 @@ data class FileInfo(
     val path: String,
     val sha: String,
     val type: String
+)
+
+data class PullRequestInfo(
+    val number: Int,
+    val state: String,
+    val htmlUrl: String
 )

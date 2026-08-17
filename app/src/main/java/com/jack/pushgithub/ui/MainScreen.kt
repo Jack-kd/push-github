@@ -10,9 +10,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -73,6 +75,18 @@ fun MainScreen(
     ) { uri: Uri? ->
         uri?.let {
             viewModel.updateSourceDir(it, viewModel.tryGetDisplayPath(it))
+        }
+    }
+
+    // 单文件选择器（OpenDocument）
+    val filePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let {
+            val name = runCatching {
+                androidx.documentfile.provider.DocumentFile.fromSingleUri(context, it)?.name
+            }.getOrNull() ?: it.lastPathSegment ?: "所选文件"
+            viewModel.updateFilePushSource(it, name)
         }
     }
 
@@ -209,6 +223,24 @@ fun MainScreen(
             onBrowse = { folderPicker.launch(null) },
             onConfirm = { viewModel.confirmPush() },
             onDismiss = { viewModel.hideSourceDirDialog() }
+        )
+    }
+
+    if (state.showFilePushDialog) {
+        FilePushDialog(
+            displayName = state.filePushDisplayName,
+            targetPath = state.filePushTargetPath,
+            prTitle = state.filePushPrTitle,
+            baseBranch = state.filePushBaseBranch,
+            onPickFile = { filePicker.launch(arrayOf("*/*")) },
+            onClearFile = { viewModel.clearFilePushSource() },
+            onTargetPathChange = { viewModel.updateFilePushTargetPath(it) },
+            onPrTitleChange = { viewModel.updateFilePushPrTitle(it) },
+            onConfirm = {
+                viewModel.hideFilePushDialog()
+                viewModel.startFilePush()
+            },
+            onDismiss = { viewModel.hideFilePushDialog() }
         )
     }
 
@@ -439,6 +471,18 @@ fun MainScreen(
                     Spacer(Modifier.width(2.dp))
                     Text("上传源码", fontSize = 12.sp, maxLines = 1)
                 }
+            }
+
+            // 推送单个文件（新建分支 + PR）
+            OutlinedButton(
+                onClick = { viewModel.showFilePushDialog() },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(12.dp),
+                enabled = !state.isWorking
+            ) {
+                Icon(Icons.Default.UploadFile, null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("推送单个文件（新分支 + PR）", fontSize = 13.sp, maxLines = 1)
             }
 
             // 进度条
@@ -1271,5 +1315,140 @@ private fun formatTimestamp(timestamp: Long): String {
         SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(timestamp))
     } catch (_: Exception) {
         timestamp.toString()
+    }
+}
+
+// ============================================================
+// 推送单个文件对话框（新分支 + PR）
+// ============================================================
+
+@Composable
+private fun FilePushDialog(
+    displayName: String,
+    targetPath: String,
+    prTitle: String,
+    baseBranch: String,
+    onPickFile: () -> Unit,
+    onClearFile: () -> Unit,
+    onTargetPathChange: (String) -> Unit,
+    onPrTitleChange: (String) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(shape = RoundedCornerShape(20.dp)) {
+            Column(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.UploadFile, null,
+                        modifier = Modifier.size(40.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text("推送单个文件", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                        Text(
+                            "新建分支提交，再通过 Pull Request 推送",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+
+                // 选择文件
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = displayName,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("本地文件") },
+                        placeholder = { Text("点击右侧按钮选择文件") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        leadingIcon = { Icon(Icons.Default.Description, null) },
+                        trailingIcon = {
+                            if (displayName.isNotBlank()) {
+                                IconButton(onClick = onClearFile) {
+                                    Icon(Icons.Default.Close, "清除")
+                                }
+                            }
+                        }
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    FilledTonalButton(
+                        onClick = onPickFile,
+                        modifier = Modifier.height(56.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.FolderOpen, "选择文件")
+                    }
+                }
+
+                if (displayName.isNotBlank()) {
+                    OutlinedTextField(
+                        value = targetPath,
+                        onValueChange = onTargetPathChange,
+                        label = { Text("仓库内路径") },
+                        placeholder = { Text("如 docs/note.md；留空 = 仓库根目录") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        leadingIcon = { Icon(Icons.Default.AccountTree, null) }
+                    )
+
+                    OutlinedTextField(
+                        value = prTitle,
+                        onValueChange = onPrTitleChange,
+                        label = { Text("PR 标题（可选）") },
+                        placeholder = { Text("默认：推送文件 ${displayName.substringAfterLast('/')}") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        leadingIcon = { Icon(Icons.Default.Sort, null) }
+                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            "将新建临时分支 → 提交文件 → 推送 → 创建 PR 到基准分支「$baseBranch」，不会直接修改主分支",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) { Text("取消") }
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = onConfirm,
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = displayName.isNotBlank()
+                    ) {
+                        Icon(Icons.Default.UploadFile, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("推送")
+                    }
+                }
+            }
+        }
     }
 }

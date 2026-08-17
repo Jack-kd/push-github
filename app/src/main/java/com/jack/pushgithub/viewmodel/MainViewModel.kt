@@ -88,7 +88,15 @@ data class MainUiState(
     val selectedFilePaths: Set<String> = emptySet(),
 
     // Source dir dialog
-    val showSourceDirDialog: Boolean = false
+    val showSourceDirDialog: Boolean = false,
+
+    // Single-file push via new branch + PR
+    val showFilePushDialog: Boolean = false,
+    val filePushSourceUri: Uri? = null,
+    val filePushDisplayName: String = "",
+    val filePushTargetPath: String = "",
+    val filePushPrTitle: String = "",
+    val filePushBaseBranch: String = "main"
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -413,6 +421,183 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun hideSourceDirDialog() {
         _uiState.update { it.copy(showSourceDirDialog = false) }
+    }
+
+    // ========== Single-file push via new branch + PR ==========
+
+    fun showFilePushDialog() {
+        _uiState.update {
+            it.copy(
+                showFilePushDialog = true,
+                filePushBaseBranch = it.branch.ifBlank { "main" }
+            )
+        }
+    }
+
+    fun hideFilePushDialog() {
+        _uiState.update { it.copy(showFilePushDialog = false) }
+    }
+
+    fun updateFilePushSource(uri: Uri, displayName: String) {
+        try {
+            getApplication<Application>().contentResolver.takePersistableUriPermission(
+                uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        } catch (_: Exception) {
+            // 部分文件管理器的 URI 不支持持久化授权，忽略即可
+        }
+        _uiState.update {
+            it.copy(
+                filePushSourceUri = uri,
+                filePushDisplayName = displayName,
+                // 默认目标路径 = 仓库根目录下的原文件名
+                filePushTargetPath = displayName.substringAfterLast('/')
+            )
+        }
+    }
+
+    fun clearFilePushSource() {
+        _uiState.update { it.copy(filePushSourceUri = null, filePushDisplayName = "") }
+    }
+
+    fun updateFilePushTargetPath(path: String) {
+        _uiState.update { it.copy(filePushTargetPath = path) }
+    }
+
+    fun updateFilePushPrTitle(title: String) {
+        _uiState.update { it.copy(filePushPrTitle = title) }
+    }
+
+    fun startFilePush() {
+        val state = _uiState.value
+        if (state.repoUrl.isBlank()) {
+            addLog("错误：目标仓库地址为空")
+            _uiState.update { it.copy(errorMessage = "请输入目标仓库地址") }
+            return
+        }
+        if (state.filePushSourceUri == null && state.filePushDisplayName.isBlank()) {
+            addLog("错误：请先选择要推送的文件")
+            _uiState.update { it.copy(errorMessage = "请先选择要推送的文件") }
+            return
+        }
+        if (!NetworkUtils.isNetworkAvailable(getApplication())) {
+            addLog("错误：网络不可用，请检查网络连接")
+            _uiState.update { it.copy(errorMessage = "网络不可用，请检查网络连接") }
+            return
+        }
+
+        val repoUrl = state.repoUrl
+        val baseBranch = state.filePushBaseBranch
+        val displayName = state.filePushDisplayName
+        val uri = state.filePushSourceUri
+        val targetPath = state.filePushTargetPath
+        val prTitle = state.filePushPrTitle
+        val platform = GitPlatform.detect(repoUrl)
+
+        clearLog()
+        addLog("开始推送单个文件...")
+        addLog("目标仓库: $repoUrl")
+        addLog("基准分支: $baseBranch")
+        addLog("本地文件: $displayName")
+        addLog("仓库内路径: ${targetPath.ifBlank { "（根目录/原文件名）" }}")
+        addLog("检测到平台: ${platform.name}")
+        addLog("流程: 新建分支 → 提交 → 推送分支 → 创建 PR")
+
+        _uiState.update { it.copy(isWorking = true, errorMessage = "", statusMessage = "准备中...") }
+
+        viewModelScope.launch {
+            var success = false
+            var resultMessage = ""
+            var pushBranchUsed = baseBranch
+            try {
+                val result = GitHelper.pushSingleFileViaPr(
+                    context = getApplication(),
+                    config = state.config,
+                    repoUrl = repoUrl,
+                    sourceUri = uri,
+                    sourcePath = displayName,
+                    sourceDisplayName = displayName,
+                    targetPath = targetPath,
+                    baseBranch = baseBranch,
+                    onProgress = { msg ->
+                        addLog(msg)
+                        _uiState.update { it.copy(statusMessage = msg) }
+                    }
+                )
+
+                result.onSuccess { pushResult ->
+                    if (pushResult.skipped) {
+                        success = true
+                        resultMessage = "文件内容与仓库一致，无需推送"
+                        addLog("✅ $resultMessage")
+                        _uiState.update { it.copy(isWorking = false, statusMessage = resultMessage, errorMessage = "") }
+                    } else {
+                        pushBranchUsed = pushResult.branch
+                        addLog("✅ 分支推送成功: ${pushResult.branch}")
+                        // 自动创建 PR（仅 GitHub 且仓库非空）
+                        if (!pushResult.repoEmpty && platform is GitPlatform.GitHub) {
+                            val token = loadToken()
+                            val ownerRepo = parseRepoUrl()
+                            if (token != null && ownerRepo != null) {
+                                try {
+                                    addLog("正在创建 Pull Request...")
+                                    val pr = GithubApi(token).createPullRequest(
+                                        owner = ownerRepo.first,
+                                        repo = ownerRepo.second,
+                                        title = prTitle.ifBlank { "推送文件: $displayName" },
+                                        head = pushResult.branch,
+                                        base = baseBranch
+                                    )
+                                    resultMessage = "PR #${pr.number} 已创建: ${pr.htmlUrl}"
+                                    addLog("✅ $resultMessage")
+                                } catch (e: Exception) {
+                                    addLog("⚠️ 分支已推送，但创建 PR 失败: ${e.message}")
+                                    resultMessage = "分支 ${pushResult.branch} 已推送（PR 创建失败）"
+                                }
+                            } else {
+                                resultMessage = "分支 ${pushResult.branch} 已推送"
+                            }
+                        } else if (pushResult.repoEmpty) {
+                            resultMessage = "仓库为空，已直接推送到 $baseBranch（未创建 PR）"
+                            addLog("✅ $resultMessage")
+                        } else {
+                            resultMessage = "分支 ${pushResult.branch} 已推送，当前平台暂不支持自动创建 PR"
+                            addLog("✅ $resultMessage")
+                        }
+                        success = true
+                        _uiState.update { it.copy(isWorking = false, statusMessage = resultMessage, errorMessage = "") }
+                    }
+                }.onFailure { e ->
+                    success = false
+                    resultMessage = e.message ?: "推送失败"
+                    addLog("❌ 推送失败: ${e.message}")
+                    logExceptionDetails(e)
+                    _uiState.update {
+                        it.copy(isWorking = false, statusMessage = "", errorMessage = e.message ?: "推送失败")
+                    }
+                }
+            } catch (e: Exception) {
+                success = false
+                resultMessage = e.message ?: "未知错误"
+                addLog("❌ 协程内异常: ${e.message}")
+                logExceptionDetails(e)
+                _uiState.update {
+                    it.copy(isWorking = false, statusMessage = "", errorMessage = e.message ?: "未知错误")
+                }
+            } finally {
+                withContext(Dispatchers.IO) {
+                    insertPushHistory(
+                        repoUrl = repoUrl,
+                        branch = pushBranchUsed,
+                        sourcePath = "单文件: $displayName",
+                        success = success,
+                        message = resultMessage
+                    )
+                }
+                val title = if (success) "文件推送完成" else "文件推送失败"
+                PushNotificationHelper.notify(getApplication(), title, resultMessage, success)
+            }
+        }
     }
 
     fun confirmPush() {

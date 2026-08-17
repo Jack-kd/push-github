@@ -12,7 +12,11 @@ import org.eclipse.jgit.lib.Repository
 import org.eclipse.jgit.transport.URIish
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
 import org.eclipse.jgit.transport.RemoteRefUpdate
+import org.eclipse.jgit.transport.RefSpec
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 object GitHelper {
 
@@ -193,6 +197,164 @@ object GitHelper {
             e.printStackTrace()
             Result.failure(e)
         }
+    }
+
+    /**
+     * 推送单个文件：先创建新分支，提交后推送该分支（不直接改主分支），
+     * 由上层调用方通过平台 API 创建 PR。
+     *
+     * @param sourceUri     通过文件选择器选择的文件（优先使用）
+     * @param sourcePath    直接路径（sourceUri 为 null 时使用）
+     * @param targetPath    文件在仓库内的目标路径，如 "docs/note.md"；
+     *                      为空或目录形式（以 "/" 结尾）时自动拼上文件名
+     * @param baseBranch    基准分支（PR 的目标分支）
+     */
+    suspend fun pushSingleFileViaPr(
+        context: Context,
+        config: GitConfig,
+        repoUrl: String,
+        sourceUri: Uri?,
+        sourcePath: String,
+        sourceDisplayName: String,
+        targetPath: String,
+        baseBranch: String,
+        onProgress: (String) -> Unit
+    ): Result<FilePushResult> = withContext(Dispatchers.IO) {
+        try {
+            val repoDir = File(context.filesDir, "temp_git_upload_file")
+            if (repoDir.exists()) {
+                repoDir.deleteRecursively()
+                onProgress("删除旧的临时目录")
+            }
+            repoDir.mkdirs()
+
+            val platform = GitPlatform.detect(repoUrl)
+            val cloneUrl = GitPlatform.buildCloneUrl(platform, repoUrl)
+            onProgress("目标地址: $cloneUrl")
+            onProgress("基准分支: $baseBranch")
+
+            // 目标路径规范化：空/目录 → 拼上文件名
+            val fileName = sourceDisplayName.substringAfterLast('/').ifBlank { "file" }
+            val finalTargetPath = normalizeTargetPath(targetPath, fileName)
+            onProgress("仓库内路径: $finalTargetPath")
+
+            // 生成新分支名 push/<文件名>-<时间戳>
+            val safeName = fileName
+                .lowercase()
+                .replace(Regex("[^a-z0-9._-]"), "-")
+                .trim('-')
+                .ifBlank { "file" }
+            val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(Date())
+            val branchName = "push/$safeName-$timestamp"
+            onProgress("新分支: $branchName")
+
+            // 浅克隆（空仓库会失败，改为本地初始化）
+            var cloneGit: Git? = null
+            var repoEmpty = false
+            onProgress("正在浅克隆远程仓库（depth=1）...")
+            try {
+                cloneGit = Git.cloneRepository()
+                    .setURI(cloneUrl)
+                    .setDirectory(repoDir)
+                    .setBranch(baseBranch)
+                    .setDepth(1)
+                    .setCredentialsProvider(UsernamePasswordCredentialsProvider(config.token, ""))
+                    .call()
+                onProgress("仓库克隆成功")
+            } catch (e: Exception) {
+                if (e.message?.contains("not found in upstream") == true ||
+                    e.message?.contains("Remote branch") == true
+                ) {
+                    onProgress("远程仓库为空（无分支），将直接初始化并推送（无法创建 PR）")
+                    repoEmpty = true
+                    cloneGit = Git.init().setDirectory(repoDir).call()
+                    cloneGit!!.remoteAdd()
+                        .setName("origin")
+                        .setUri(URIish(cloneUrl))
+                        .call()
+                } else {
+                    throw e
+                }
+            }
+            cloneGit!!.close()
+
+            Git.open(repoDir).use { git ->
+                configureRepoForPush(git.repository)
+
+                // 非空仓库：从基准分支创建新分支
+                if (!repoEmpty) {
+                    onProgress("创建新分支 $branchName ...")
+                    git.branchCreate().setName(branchName).call()
+                    git.checkout().setName(branchName).call()
+                }
+
+                // 写入单个文件
+                onProgress("写入文件: $finalTargetPath")
+                val destFile = File(git.repository.workTree, finalTargetPath)
+                destFile.parentFile?.mkdirs()
+                if (sourceUri != null) {
+                    context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                        destFile.outputStream().use { output -> input.copyTo(output) }
+                    } ?: throw Exception("无法读取所选文件")
+                } else {
+                    val srcFile = File(sourcePath)
+                    if (!srcFile.exists() || !srcFile.isFile) {
+                        throw Exception("本地文件不存在或无法访问: $sourcePath")
+                    }
+                    srcFile.copyTo(destFile, overwrite = true)
+                }
+                onProgress("文件写入完成")
+
+                // 变更检测：内容一致则跳过，避免空提交
+                onProgress("检测文件变更...")
+                git.add().addFilepattern(finalTargetPath).call()
+                val status = git.status().call()
+                val hasChanges = status.added.isNotEmpty() ||
+                        status.changed.isNotEmpty() ||
+                        status.modified.isNotEmpty()
+                if (!hasChanges) {
+                    onProgress("文件内容与仓库一致，跳过推送")
+                    repoDir.deleteRecursively()
+                    return@withContext Result.success(FilePushResult(branch = branchName, skipped = true))
+                }
+
+                // 提交
+                onProgress("提交更改...")
+                git.commit()
+                    .setAuthor(config.username, config.email)
+                    .setMessage("上传文件 $finalTargetPath")
+                    .call()
+
+                // 推送新分支（空仓库时推送到基准分支）
+                val pushBranch = if (repoEmpty) baseBranch else branchName
+                onProgress("正在推送分支 $pushBranch ...")
+                git.push()
+                    .setCredentialsProvider(UsernamePasswordCredentialsProvider(config.token, ""))
+                    .setTimeout(600)
+                    .setRefSpecs(listOf(RefSpec("HEAD:refs/heads/$pushBranch")))
+                    .call()
+                onProgress("分支推送成功: $pushBranch")
+            }
+
+            onProgress("清理临时目录...")
+            repoDir.deleteRecursively()
+            Result.success(FilePushResult(branch = if (repoEmpty) baseBranch else branchName, repoEmpty = repoEmpty))
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 规范化仓库内目标路径：空路径或仅目录（以 "/" 结尾）时补上文件名
+     */
+    private fun normalizeTargetPath(targetPath: String, fileName: String): String {
+        var p = targetPath.trim().trimStart('/')
+        if (p.isEmpty()) return fileName
+        // 先判断是否为目录形式，再去掉结尾斜杠拼文件名
+        val isDirForm = p.endsWith("/")
+        p = p.removeSuffix("/").trimEnd('/')
+        return if (isDirForm) "$p/$fileName" else p
     }
 
     /**
@@ -426,3 +588,12 @@ object GitHelper {
         return copied
     }
 }
+
+/**
+ * 单文件推送结果
+ */
+data class FilePushResult(
+    val branch: String,
+    val repoEmpty: Boolean = false,
+    val skipped: Boolean = false
+)
