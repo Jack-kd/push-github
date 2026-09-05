@@ -42,6 +42,16 @@ import com.jack.pushgithub.viewmodel.MainViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.jack.pushgithub.ui.theme.StatusOnline
+import com.jack.pushgithub.ui.theme.StatusOffline
+
+// 日志终端配色（保留深色终端风格）
+private val LogBackground = Color(0xFF1E1E2E)
+private val LogMuted = Color(0xFF6C7086)
+private val LogError = Color(0xFFFF6B6B)
+private val LogSuccess = Color(0xFF69F0AE)
+private val LogWarning = Color(0xFFFFD93D)
+private val LogInfo = Color(0xFFCDD6F4)
 
 // ============================================================
 // 主界面
@@ -268,7 +278,7 @@ fun MainScreen(
                     // 在线状态
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = if (isOnline) Color(0xFF2E7D32) else Color(0xFFC62828),
+                        color = if (isOnline) StatusOnline else StatusOffline,
                         modifier = Modifier.padding(end = 4.dp)
                     ) {
                         Text(
@@ -450,27 +460,27 @@ fun MainScreen(
                     Spacer(Modifier.width(2.dp))
                     Text("下载源码", fontSize = 12.sp, maxLines = 1)
                 }
+            }
 
-                Button(
-                    onClick = {
-                        viewModel.showSourceDirDialog()
-                    },
-                    modifier = Modifier.weight(1f).height(48.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    enabled = !state.isWorking
-                ) {
-                    if (state.isWorking) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    } else {
-                        Icon(Icons.Default.CloudUpload, null, modifier = Modifier.size(16.dp))
-                    }
-                    Spacer(Modifier.width(2.dp))
-                    Text("上传源码", fontSize = 12.sp, maxLines = 1)
+            // 上传源码：主操作，突出显示
+            Button(
+                onClick = { viewModel.showSourceDirDialog() },
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(14.dp),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp),
+                enabled = !state.isWorking
+            ) {
+                if (state.isWorking) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Icon(Icons.Default.CloudUpload, null, modifier = Modifier.size(18.dp))
                 }
+                Spacer(Modifier.width(6.dp))
+                Text("上传源码", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             }
 
             // 推送单个文件（新建分支 + PR）
@@ -598,7 +608,7 @@ fun MainScreen(
                             .fillMaxWidth()
                             .weight(1f)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFF1E1E2E))
+                            .background(LogBackground)
                             .padding(8.dp)
                     ) {
                         if (state.logMessages.isEmpty()) {
@@ -609,7 +619,7 @@ fun MainScreen(
                                 ) {
                                     Text(
                                         "暂无日志",
-                                        color = Color(0xFF6C7086),
+                                        color = LogMuted,
                                         fontSize = 13.sp
                                     )
                                 }
@@ -622,11 +632,11 @@ fun MainScreen(
                                     fontFamily = FontFamily.Monospace,
                                     fontSize = 11.sp,
                                     color = when {
-                                        log.contains("❌") || log.contains("失败") || log.contains("错误") -> Color(0xFFFF6B6B)
-                                        log.contains("✅") || log.contains("成功") || log.contains("完成") -> Color(0xFF69F0AE)
-                                        log.contains("⏳") || log.contains("正在") || log.contains("开始") -> Color(0xFFFFD93D)
-                                        log.contains("---") -> Color(0xFF6C7086)
-                                        else -> Color(0xFFCDD6F4)
+                                        log.contains("❌") || log.contains("失败") || log.contains("错误") -> LogError
+                                        log.contains("✅") || log.contains("成功") || log.contains("完成") -> LogSuccess
+                                        log.contains("⏳") || log.contains("正在") || log.contains("开始") -> LogWarning
+                                        log.contains("---") -> LogMuted
+                                        else -> LogInfo
                                     },
                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 3.dp)
                                 )
@@ -864,7 +874,7 @@ private fun HistoryDialog(
                                             Text(
                                                 item.message,
                                                 fontSize = 11.sp,
-                                                color = if (item.success) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,
+                                                color = if (item.success) StatusOnline else MaterialTheme.colorScheme.error,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )

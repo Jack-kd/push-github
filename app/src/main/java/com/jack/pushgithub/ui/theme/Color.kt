@@ -15,3 +15,6 @@ val SurfaceDark = Color(0xFF1E1E1E)
 val PrimaryBlue = Color(0xFF2196F3)
 val PrimaryBlueDark = Color(0xFF1976D2)
 val OnPrimary = Color.White
+
+val StatusOnline = Color(0xFF2E7D32)
+val StatusOffline = Color(0xFFC62828)
