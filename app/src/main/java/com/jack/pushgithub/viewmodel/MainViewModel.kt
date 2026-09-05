@@ -318,16 +318,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun parseRepoUrl(): Pair<String, String>? {
-        val repoUrl = _uiState.value.repoUrl
-            .replace("https://github.com/", "")
-            .removeSuffix(".git")
-        val parts = repoUrl.split("/")
-        val owner = parts.getOrNull(0) ?: ""
-        val repo = parts.getOrNull(1) ?: ""
-        if (owner.isBlank() || repo.isBlank()) return null
-        return Pair(owner, repo)
-    }
+    private fun parseRepoUrl(): Pair<String, String>? =
+        GitPlatform.parseRepo(_uiState.value.repoUrl)
 
     private suspend fun loadToken(): String? {
         val token = repository.loadConfig().token
@@ -761,14 +753,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
 
-                val repoUrlStr = repoUrl
-                    .replace("https://github.com/", "")
-                    .removeSuffix(".git")
-                val parts = repoUrlStr.split("/")
-                val owner = parts.getOrNull(0) ?: ""
-                val repo = parts.getOrNull(1) ?: ""
-
-                if (owner.isBlank() || repo.isBlank()) {
+                val (owner, repo) = GitPlatform.parseRepo(repoUrl) ?: run {
                     addLog("错误：无效的仓库地址")
                     _uiState.update { it.copy(isLoadingCommits = false) }
                     return@launch
@@ -1038,6 +1023,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val result = GitHelper.cloneDownload(
                     repoUrl = state.repoUrl,
                     destPath = state.downloadPath,
+                    token = state.config.token,
                     onProgress = { msg ->
                         addLog(msg)
                         _uiState.update { it.copy(statusMessage = msg) }

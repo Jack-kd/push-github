@@ -34,6 +34,19 @@ sealed class GitPlatform {
             else -> GitHub
         }
 
+        /**
+         * 从仓库 URL 解析出 (owner, repo)，支持 https/ssh、.git 后缀、末尾斜杠与多余路径。
+         * 无法解析时返回 null。
+         */
+        fun parseRepo(url: String): Pair<String, String>? {
+            val match = Regex(
+                "(?:https?://[^/]+/|git@[^:]+:)([^/]+)/([^/]+?)(?:\\.git)?(?:/.*)?$"
+            ).find(url.trim())
+            val owner = match?.groupValues?.getOrNull(1)?.takeIf { it.isNotBlank() }
+            val repo = match?.groupValues?.getOrNull(2)?.takeIf { it.isNotBlank() }
+            return if (owner != null && repo != null) owner to repo else null
+        }
+
         fun buildCloneUrl(platform: GitPlatform, url: String): String {
             val clean = url.trimEnd('/')
             return when (platform) {

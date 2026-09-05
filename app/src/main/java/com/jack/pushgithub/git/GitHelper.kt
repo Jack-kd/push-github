@@ -160,6 +160,7 @@ object GitHelper {
                             .setCredentialsProvider(UsernamePasswordCredentialsProvider(config.token, ""))
                             .setTimeout(600)
                             .setRefSpecs(listOf(org.eclipse.jgit.transport.RefSpec("HEAD:refs/heads/$branch")))
+                            .setForce(true)
                             .call()
 
                         for (pushInfo in pushResult) {
@@ -495,6 +496,7 @@ object GitHelper {
     suspend fun cloneDownload(
         repoUrl: String,
         destPath: String,
+        token: String = "",
         onProgress: (String) -> Unit,
         onProgressPercent: (Int) -> Unit
     ): Result<String> = withContext(Dispatchers.IO) {
@@ -523,6 +525,9 @@ object GitHelper {
             val git = Git.cloneRepository()
                 .setURI(cloneUrl)
                 .setDirectory(destDir)
+                .apply {
+                    if (token.isNotBlank()) setCredentialsProvider(UsernamePasswordCredentialsProvider(token, ""))
+                }
                 .setProgressMonitor(object : org.eclipse.jgit.lib.ProgressMonitor {
                      override fun start(totalTasks: Int) {}
                     override fun beginTask(title: String?, work: Int) {
